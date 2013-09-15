@@ -93,7 +93,7 @@ public class AsteroidBase : MonoBehaviour {
 		//Move Down the Asteroids with the velocity of each class
 		transform.Translate(Vector3.down * Time.deltaTime * m_velocity);
 		// Loss a live and Destroy the Asteroid if the user has not destroyed before arriving to London :)
-		float posToDestroy = Camera.mainCamera.transform.localPosition.y - Camera.mainCamera.orthographicSize - m_sprite.GetBounds().size.y;
+		float posToDestroy = Camera.main.transform.localPosition.y - Camera.main.orthographicSize - m_sprite.GetBounds().size.y;
 		if(transform.localPosition.y < posToDestroy)
 		{
 			//We have missed to destroy the Asteroid so we have loss a live!

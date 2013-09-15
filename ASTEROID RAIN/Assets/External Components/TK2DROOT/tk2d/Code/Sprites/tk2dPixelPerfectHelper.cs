@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[AddComponentMenu("2D Toolkit/Extra/tk2dPixelPerfectHelper")]
+[AddComponentMenu("2D Toolkit/Deprecated/Extra/tk2dPixelPerfectHelper")]
 /// <summary>
 /// Allows remapping resolution and rescaling based on settings in this class. Deprecated and replaced by <see cref="tk2dCamera"/>.
 /// </summary>
@@ -52,7 +52,7 @@ public class tk2dPixelPerfectHelper : MonoBehaviour
 		}
 		else
 		{
-			float tk = resScale * Mathf.Tan(Mathf.Deg2Rad * cam.fov * 0.5f) / collectionOrthoSize;
+			float tk = resScale * Mathf.Tan(Mathf.Deg2Rad * cam.fieldOfView * 0.5f) / collectionOrthoSize;
 			scaleK = tk * -cam.transform.position.z;
 			scaleD = tk;
 		}

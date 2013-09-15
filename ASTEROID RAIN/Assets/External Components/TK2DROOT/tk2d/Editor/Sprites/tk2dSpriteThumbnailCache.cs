@@ -2,36 +2,45 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 
-public class tk2dSpriteThumbnailCache
+public static class tk2dSpriteThumbnailCache
 {
-	public tk2dSpriteThumbnailCache()
+	static void Init()
 	{
-		System.Type guiClipType = System.Type.GetType("UnityEngine.GUIClip,UnityEngine");
-		if (guiClipType != null)
-			guiClipVisibleRectProperty = guiClipType.GetProperty("visibleRect");
+		if (guiClipVisibleRectProperty == null) {
+			System.Type guiClipType = System.Type.GetType("UnityEngine.GUIClip,UnityEngine");
+			if (guiClipType != null) {
+				guiClipVisibleRectProperty = guiClipType.GetProperty("visibleRect");
+			}
+		}
 
-		mat = new Material(Shader.Find("Hidden/tk2d/EditorUtility"));
-		mat.hideFlags = HideFlags.DontSave;
+		if (mat == null) {
+			mat = new Material(Shader.Find("Hidden/tk2d/EditorUtility"));
+			mat.hideFlags = HideFlags.DontSave;
+		}
 	}
 
-	public void Destroy() 
+	public static void Done() 
 	{
-		Object.DestroyImmediate(mat);
+		if (mat != null) {
+			Object.DestroyImmediate(mat);
+			mat = null;
+		}
 	}
 
-	public Vector2 GetSpriteSizePixels(tk2dSpriteDefinition def)
+	public static Vector2 GetSpriteSizePixels(tk2dSpriteDefinition def)
 	{
 		return new Vector2(def.untrimmedBoundsData[1].x / def.texelSize.x, def.untrimmedBoundsData[1].y / def.texelSize.y);
 	}
 
-	public void DrawSpriteTexture(Rect rect, tk2dSpriteDefinition def)
+	public static void DrawSpriteTexture(Rect rect, tk2dSpriteDefinition def)
 	{
 		DrawSpriteTexture(rect, def, Color.white);		
 	}
 
 	// Draws the sprite texture in the rect given
 	// Will center the sprite in the rect, regardless of anchor set-up
-	public void DrawSpriteTextureInRect(Rect rect, tk2dSpriteDefinition def, Color tint) {
+	public static void DrawSpriteTextureInRect(Rect rect, tk2dSpriteDefinition def, Color tint) {
+		Init();
 		if (Event.current.type == EventType.Repaint) {
 			float sw = def.untrimmedBoundsData[1].x;
 			float sh = def.untrimmedBoundsData[1].y;
@@ -53,8 +62,44 @@ public class tk2dSpriteThumbnailCache
 		}
 	}
 
-	public void DrawSpriteTexture(Rect rect, tk2dSpriteDefinition def, Color tint)
+	// Draw a sprite within the rect - i.e. starting at the rect 
+	public static void DrawSpriteTextureInRect( Rect rect, tk2dSpriteDefinition def, Color tint, Vector2 position, float angle, Vector2 scale ) {
+		Init();
+		Vector2 pixelSize = new Vector3( 1.0f / (def.texelSize.x), 1.0f / (def.texelSize.y) );
+
+		Rect visibleRect = VisibleRect;
+		Vector4 clipRegion = new Vector4(visibleRect.x, visibleRect.y, visibleRect.x + visibleRect.width, visibleRect.y + visibleRect.height);
+
+		if (Event.current.type == EventType.Repaint)
+		{
+			if (def.material != null) {
+				Mesh tmpMesh = new Mesh();
+				tmpMesh.vertices = def.positions;
+				tmpMesh.uv = def.uvs;
+				tmpMesh.triangles = def.indices;
+				tmpMesh.RecalculateBounds();
+				tmpMesh.RecalculateNormals();
+
+				mat.mainTexture = def.material.mainTexture;
+				mat.SetColor("_Tint", tint);
+				mat.SetVector("_Clip", clipRegion);
+
+				Matrix4x4 m = new Matrix4x4();
+				m.SetTRS(new Vector3(rect.x + position.x * scale.y, rect.y + position.y * scale.y, 0), 
+					Quaternion.Euler(0, 0, -angle), 
+					new Vector3(pixelSize.x * scale.x, -pixelSize.y * scale.y, 1));
+
+				mat.SetPass(0);
+				Graphics.DrawMeshNow(tmpMesh, m * GUI.matrix);
+
+				Object.DestroyImmediate(tmpMesh);
+			}
+		}
+	}
+
+	public static void DrawSpriteTexture(Rect rect, tk2dSpriteDefinition def, Color tint)
 	{
+		Init();
 		Vector2 pixelSize = new Vector3( rect.width / def.untrimmedBoundsData[1].x, rect.height / def.untrimmedBoundsData[1].y);
 
 		Rect visibleRect = VisibleRect;
@@ -67,34 +112,37 @@ public class tk2dSpriteThumbnailCache
 
 		if (Event.current.type == EventType.Repaint && visible)
 		{
-			Mesh tmpMesh = new Mesh();
-			tmpMesh.vertices = def.positions;
-			tmpMesh.uv = def.uvs;
-			tmpMesh.triangles = def.indices;
-			tmpMesh.RecalculateBounds();
-			tmpMesh.RecalculateNormals();
+			if (def.material != null) {
+				Mesh tmpMesh = new Mesh();
+				tmpMesh.vertices = def.positions;
+				tmpMesh.uv = def.uvs;
+				tmpMesh.triangles = def.indices;
+				tmpMesh.RecalculateBounds();
+				tmpMesh.RecalculateNormals();
 
-			Vector3 t = def.untrimmedBoundsData[1] * 0.5f - def.untrimmedBoundsData[0];
-			float tq = def.untrimmedBoundsData[1].y;
+				Vector3 t = def.untrimmedBoundsData[1] * 0.5f - def.untrimmedBoundsData[0];
+				float tq = def.untrimmedBoundsData[1].y;
 
-			mat.mainTexture = def.material.mainTexture;
-			mat.SetColor("_Tint", tint);
-			mat.SetVector("_Clip", clipRegion);
+				mat.mainTexture = def.material.mainTexture;
+				mat.SetColor("_Tint", tint);
+				mat.SetVector("_Clip", clipRegion);
 
-			Matrix4x4 m = new Matrix4x4();
-			m.SetTRS(new Vector3(rect.x + t.x * pixelSize.x, rect.y + (tq - t.y) * pixelSize.y, 0), 
-				Quaternion.identity, 
-				new Vector3(pixelSize.x, -pixelSize.y, 1));
+				Matrix4x4 m = new Matrix4x4();
+				m.SetTRS(new Vector3(rect.x + t.x * pixelSize.x, rect.y + (tq - t.y) * pixelSize.y, 0), 
+					Quaternion.identity, 
+					new Vector3(pixelSize.x, -pixelSize.y, 1));
 
-			mat.SetPass(0);
-			Graphics.DrawMeshNow(tmpMesh, m * GUI.matrix);
+				mat.SetPass(0);
+				Graphics.DrawMeshNow(tmpMesh, m * GUI.matrix);
 
-			Object.DestroyImmediate(tmpMesh);
+				Object.DestroyImmediate(tmpMesh);
+			}
 		}
 	}
 
-	public void DrawSpriteTextureCentered(Rect rect, tk2dSpriteDefinition def, Vector2 translate, float scale, Color tint)
+	public static void DrawSpriteTextureCentered(Rect rect, tk2dSpriteDefinition def, Vector2 translate, float scale, Color tint)
 	{
+		Init();
 		Vector2 pixelSize = new Vector3( 1.0f / def.texelSize.x, 1.0f / def.texelSize.y);
 
 		Rect visibleRect = VisibleRect;
@@ -132,14 +180,16 @@ public class tk2dSpriteThumbnailCache
 	}
 
 
-
-
-
-	Material mat;
-
 	// Innards
-	System.Reflection.PropertyInfo guiClipVisibleRectProperty = null;
-	Rect VisibleRect 
+	static Material mat;
+
+	public static Material GetMaterial() {
+		Init();
+		return mat;
+	}
+
+	static System.Reflection.PropertyInfo guiClipVisibleRectProperty = null;
+	public static Rect VisibleRect 
 	{
 		get
 		{

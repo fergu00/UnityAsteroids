@@ -68,7 +68,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 		Vector2 clipScrollbar = Vector2.zero;
 
 		// Trigger rects and selection utility
-		Rect GetRectForTrigger(Rect triggerRect, int frame) { return new Rect(triggerRect.x + clipLeftHeaderSpace + frameWidth * frame - 3, triggerRect.y + 1, 5, 14); }
+		Rect GetRectForTrigger(Rect triggerRect, int frame) { return new Rect(triggerRect.x + clipLeftHeaderSpace + frameWidth * frame - 3, triggerRect.y + 1, 15, 14); }
 		int GetRoundedSelectedTrigger(Rect triggerRect, Vector2 mousePosition) { return (int)Mathf.Round((mousePosition.x - triggerRect.x - clipLeftHeaderSpace) / frameWidth); }
 		int GetSelectedTrigger(Rect triggerRect, Vector2 mousePosition) {
 			int rounded = GetRoundedSelectedTrigger(triggerRect, mousePosition);
@@ -271,7 +271,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 			}
 			if (state.selectedFrame != -1 && (GUIUtility.hotControl == controlId || (GUIUtility.keyboardControl == 0 && state.type == State.Type.None)))
 			{
-				if (ev.type == EventType.KeyDown && (ev.keyCode == KeyCode.Delete || ev.keyCode == KeyCode.Backspace))
+				if (ev.type == EventType.KeyDown && (ev.keyCode == KeyCode.Delete || ev.keyCode == KeyCode.Backspace) && frameGroups.Count > 1)
 				{
 					frameGroups.RemoveAt(state.selectedFrame);
 					ClipEditor.RecalculateFrames(clip, frameGroups);

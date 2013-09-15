@@ -3,7 +3,7 @@ Shader "Hidden/tk2d/EditorUtility"
 	SubShader
 	{
 		Tags {"Queue"="Transparent" "IgnoreProjector"="True" "RenderType"="Transparent"}
-		ZWrite Off Lighting Off Cull Off Fog { Mode Off } Blend SrcAlpha OneMinusSrcAlpha AlphaTest Greater 0
+		ZTest Always ZWrite Off Lighting Off Cull Off Fog { Mode Off } Blend SrcAlpha OneMinusSrcAlpha AlphaTest Greater 0
 		LOD 110
 		
 		Pass 

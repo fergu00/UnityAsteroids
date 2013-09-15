@@ -3,79 +3,49 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Sprite collection size.
-/// </summary>
-public class tk2dSpriteCollectionSize : tk2dRuntime.SpriteCollectionSize {
-		/// <summary>
-		/// When you are using an ortho camera. Use this to create sprites which will be pixel perfect
-		/// automatically at the resolution and orthoSize given.
-		/// </summary>
-		new public static tk2dSpriteCollectionSize Explicit(float orthoSize, float targetHeight) { return new tk2dSpriteCollectionSize(orthoSize, targetHeight); }
-
-		/// <summary>
-		/// Use when you need the sprite to be pixel perfect on a tk2dCamera.
-		/// </summary>
-		new public static tk2dSpriteCollectionSize ForTk2dCamera() { return new tk2dSpriteCollectionSize(0.5f, 1.0f); }
-
-		protected tk2dSpriteCollectionSize(float orthoSize, float targetHeight) : 
-			base( orthoSize, targetHeight ) {
-		}
-}
-
 namespace tk2dRuntime
 {
-	public class SpriteCollectionSize
-	{
-		/// <summary>
-		/// When you are using an ortho camera. Use this to create sprites which will be pixel perfect
-		/// automatically at the resolution and orthoSize given.
-		/// </summary>
-		public static SpriteCollectionSize Explicit(float orthoSize, float targetHeight) { return new SpriteCollectionSize(orthoSize, targetHeight); }
-
-		/// <summary>
-		/// Use when you need the sprite to be pixel perfect on a tk2dCamera.
-		/// </summary>
-		public static SpriteCollectionSize ForTk2dCamera() { return new SpriteCollectionSize(0.5f, 1.0f); }
-
-		protected SpriteCollectionSize(float orthoSize, float targetHeight)
-		{
-			this.orthoSize = orthoSize;
-			this.targetHeight = targetHeight;
-		}
-
-		public float orthoSize;
-		public float targetHeight;
-	}
-
 	static class SpriteCollectionGenerator 
 	{
-		public static tk2dSpriteCollectionData CreateFromTexture(Texture texture, SpriteCollectionSize size, Rect region, Vector2 anchor)
+		public static tk2dSpriteCollectionData CreateFromTexture(Texture texture, tk2dSpriteCollectionSize size, Rect region, Vector2 anchor)
 		{
 			return CreateFromTexture(texture, size, new string[] { "Unnamed" }, new Rect[] { region },  new Vector2[] { anchor } );
 		}
 		
-		public static tk2dSpriteCollectionData CreateFromTexture(Texture texture, SpriteCollectionSize size, string[] names, Rect[] regions, Vector2[] anchors) {
+		public static tk2dSpriteCollectionData CreateFromTexture(Texture texture, tk2dSpriteCollectionSize size, string[] names, Rect[] regions, Vector2[] anchors) {
 			Vector2 textureDimensions = new Vector2( texture.width, texture.height );
 			return CreateFromTexture( texture, size, textureDimensions, names, regions, null, anchors, null );
 		}
 
 		public static tk2dSpriteCollectionData CreateFromTexture(
 			Texture texture,
-			SpriteCollectionSize size,
+			tk2dSpriteCollectionSize size,
 			Vector2 textureDimensions,
 			string[] names,
 			Rect[] regions,
 			Rect[] trimRects, Vector2[] anchors,
 			bool[] rotated)
 		{
-			GameObject go = new GameObject("SpriteCollection");
+			return CreateFromTexture(null, texture, size, textureDimensions, names, regions, trimRects, anchors, rotated);
+		}
+
+		public static tk2dSpriteCollectionData CreateFromTexture(
+			GameObject parentObject,
+			Texture texture,
+			tk2dSpriteCollectionSize size,
+			Vector2 textureDimensions,
+			string[] names,
+			Rect[] regions,
+			Rect[] trimRects, Vector2[] anchors,
+			bool[] rotated)
+		{
+			GameObject go = ( parentObject != null ) ? parentObject : new GameObject("SpriteCollection");
 			tk2dSpriteCollectionData sc = go.AddComponent<tk2dSpriteCollectionData>();
 			sc.Transient = true;
 			sc.version = tk2dSpriteCollectionData.CURRENT_VERSION;
 			
-			sc.invOrthoSize = 1.0f / size.orthoSize;
-			sc.halfTargetHeight = size.targetHeight * 0.5f;
+			sc.invOrthoSize = 1.0f / size.OrthoSize;
+			sc.halfTargetHeight = size.TargetHeight * 0.5f;
 			sc.premultipliedAlpha = false;
 			
 			string shaderName = "tk2d/BlendVertexColor";
@@ -102,7 +72,7 @@ namespace tk2dRuntime
 			sc.textures = new Texture[1] { texture };
 			sc.buildKey = UnityEngine.Random.Range(0, Int32.MaxValue);
 			
-			float scale = 2.0f * size.orthoSize / size.targetHeight;
+			float scale = 2.0f * size.OrthoSize / size.TargetHeight;
 			Rect trimRect = new Rect(0, 0, 0, 0);
 			
 			// Generate geometry
@@ -212,7 +182,8 @@ namespace tk2dRuntime
 		}
 
 		// Texture packer import
-		public static tk2dSpriteCollectionData CreateFromTexturePacker( tk2dRuntime.SpriteCollectionSize spriteCollectionSize, string texturePackerFileContents, Texture texture ) {
+		public static tk2dSpriteCollectionData CreateFromTexturePacker( tk2dSpriteCollectionSize spriteCollectionSize, string texturePackerFileContents, Texture texture ) {
+#if !UNITY_FLASH
 			List<string> names = new List<string>();
 			List<Rect> rects = new List<Rect>();
 			List<Rect> trimRects = new List<Rect>();
@@ -299,6 +270,9 @@ namespace tk2dRuntime
 				trimRects.ToArray(),
 				anchors.ToArray(),
 				rotated.ToArray() );
+#else
+			return null;
+#endif
 		}		
 	}
 }

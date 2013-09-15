@@ -269,10 +269,8 @@ namespace tk2dEditor.SpriteCollectionEditor
 												"Are you sure you want to do this?"
 												, "Yes", "No"))
 				{
-					SpriteCollection.altMaterials = new Material[0];
-					SpriteCollection.atlasMaterials = new Material[0];
-					SpriteCollection.atlasTextures = new Texture2D[0];
-					SpriteCollection.spriteCollection = null;
+					SpriteCollection.ClearReferences();
+
 					foreach (tk2dSpriteCollectionPlatform plat in SpriteCollection.platforms)
 						plat.spriteCollection = null;
 				}
@@ -354,10 +352,24 @@ namespace tk2dEditor.SpriteCollectionEditor
 			SpriteCollection.textureCompression = (tk2dSpriteCollection.TextureCompression)EditorGUILayout.EnumPopup("Compression", SpriteCollection.textureCompression);
 			SpriteCollection.userDefinedTextureSettings = EditorGUILayout.Toggle("User Defined", SpriteCollection.userDefinedTextureSettings);
 			if (SpriteCollection.userDefinedTextureSettings) GUI.enabled = false;
+			EditorGUI.indentLevel++;
 			SpriteCollection.wrapMode = (TextureWrapMode)EditorGUILayout.EnumPopup("Wrap Mode", SpriteCollection.wrapMode);
 			SpriteCollection.anisoLevel = (int)EditorGUILayout.IntSlider("Aniso Level", SpriteCollection.anisoLevel, 0, 9);
 			SpriteCollection.mipmapEnabled = EditorGUILayout.Toggle("Mip Maps", SpriteCollection.mipmapEnabled);
+			EditorGUI.indentLevel--;
 			GUI.enabled = true;
+
+			int curRescaleSelection = 0;
+			if (SpriteCollection.globalTextureRescale > 0.4 && SpriteCollection.globalTextureRescale < 0.6)
+				curRescaleSelection = 1;
+			if (SpriteCollection.globalTextureRescale > 0.2 && SpriteCollection.globalTextureRescale < 0.3)
+				curRescaleSelection = 2;
+			int newRescaleSelection = EditorGUILayout.Popup("Rescale", curRescaleSelection, new string[] {"1", "0.5", "0.25"});
+			switch (newRescaleSelection) {
+				case 0: SpriteCollection.globalTextureRescale = 1.0f; break;
+				case 1: SpriteCollection.globalTextureRescale = 0.5f; break;
+				case 2: SpriteCollection.globalTextureRescale = 0.25f; break;
+			}
 
 			EndHeader();
 		}
@@ -365,6 +377,10 @@ namespace tk2dEditor.SpriteCollectionEditor
 		void DrawSpriteCollectionSettings()
 		{
 			BeginHeader("Sprite Collection Settings");
+
+			tk2dGuiUtility.SpriteCollectionSize( SpriteCollection.sizeDef );
+
+			GUILayout.Space(4);
 
 			SpriteCollection.padAmount = EditorGUILayout.IntPopup("Pad Amount", SpriteCollection.padAmount, padAmountLabels, padAmountValues);
 			if (SpriteCollection.padAmount == 0 && SpriteCollection.filterMode != FilterMode.Point)
@@ -378,15 +394,6 @@ namespace tk2dEditor.SpriteCollectionEditor
 			SpriteCollection.physicsDepth = EditorGUILayout.FloatField("Collider depth", SpriteCollection.physicsDepth);
 			SpriteCollection.disableTrimming = EditorGUILayout.Toggle("Disable Trimming", SpriteCollection.disableTrimming);
 			SpriteCollection.normalGenerationMode = (tk2dSpriteCollection.NormalGenerationMode)EditorGUILayout.EnumPopup("Normal Generation", SpriteCollection.normalGenerationMode);
-	
-			SpriteCollection.useTk2dCamera = EditorGUILayout.Toggle("Use tk2dCamera", SpriteCollection.useTk2dCamera);
-			if (!SpriteCollection.useTk2dCamera)
-			{
-				EditorGUI.indentLevel = EditorGUI.indentLevel + 1;
-				SpriteCollection.targetHeight = EditorGUILayout.IntField("Target Height", SpriteCollection.targetHeight);
-				SpriteCollection.targetOrthoSize = EditorGUILayout.FloatField("Target Ortho Size", SpriteCollection.targetOrthoSize);
-				EditorGUI.indentLevel = EditorGUI.indentLevel - 1;
-			}
 
 			EndHeader();
 		}
@@ -461,6 +468,9 @@ namespace tk2dEditor.SpriteCollectionEditor
 				EditorGUILayout.LabelField("Atlas Height", SpriteCollection.atlasHeight.ToString());
 				EditorGUILayout.LabelField("Atlas Wastage", SpriteCollection.atlasWastage.ToString("0.00") + "%");
 			}
+
+			GUIContent remDuplicates = new GUIContent("Remove Duplicates", "Remove duplicate textures after trimming and other processing.");
+			SpriteCollection.removeDuplicates = EditorGUILayout.Toggle(remDuplicates, SpriteCollection.removeDuplicates);
 
 			EndHeader();
 		}

@@ -18,12 +18,13 @@ public class tk2dUpdateWindow : EditorWindow
 	ReleaseInfo[] releases = null;
 	
 	string updateInfoUrl = "http://www.2dtoolkit.com/updateinfo.xml";
-	string allUpdatesUrl = "http://www.2dtoolkit.com/forum/index.php?board=4.0";
+	string allUpdatesUrl = "http://www.2dtoolkit.com/downloads";
 	bool showBetaReleases = false;
 	bool showOlderVersions = false;
 	
 	bool errorState = false;
 	string errorMessage = "Click refresh to check for updates.";
+	string platformError = "Unable to check for updates when the active build platform is set to WebPlayer.\nSwitch to another build platform to check for updates, or click the button below to manually check for updates on the website.";
 	Vector2 scrollPosition = Vector2.zero;
 	
 	int GetSortId(int id)
@@ -37,6 +38,23 @@ public class tk2dUpdateWindow : EditorWindow
 
 	void OnGUI()
 	{
+		if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.WebPlayer || 
+			EditorUserBuildSettings.activeBuildTarget == BuildTarget.WebPlayerStreamed) {
+			GUILayout.Label(platformError);
+
+			GUILayout.Space(25);
+
+			GUILayout.BeginHorizontal();
+			GUILayout.FlexibleSpace();
+			if (GUILayout.Button("Manually check for updates")) {
+				Application.OpenURL(allUpdatesUrl);	
+			}
+			GUILayout.FlexibleSpace();
+			GUILayout.EndHorizontal();
+
+			return;
+		}
+
 		if (validUpdateData)
 		{
 			

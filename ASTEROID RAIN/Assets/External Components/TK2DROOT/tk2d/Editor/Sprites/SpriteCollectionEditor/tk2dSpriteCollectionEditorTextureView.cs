@@ -11,7 +11,8 @@ namespace tk2dEditor.SpriteCollectionEditor
 			None,
 			Texture,
 			Anchor,
-			Collider
+			Collider,
+			AttachPoint,
 		}
 		
 		int textureBorderPixels = 16;
@@ -193,35 +194,63 @@ namespace tk2dEditor.SpriteCollectionEditor
 				bool flipIsland = false;
 				bool disconnectIsland = false;
 				
+				Event ev = Event.current;
+
 				for (int i = 0; i < island.points.Length; ++i)
 				{
 					Vector3 cp = island.points[i];
-					KeyCode keyCode = KeyCode.None;
-					int id = 16433 + i;
-					cp = (tk2dGuiUtility.PositionHandle(id, cp * editorDisplayScale + origin3, 4.0f, handleInactiveColor, handleActiveColor, out keyCode) - origin) / editorDisplayScale;
+					int id = "tk2dPolyEditor".GetHashCode() + islandId * 10000 + i;
+					cp = (tk2dGuiUtility.Handle(tk2dEditorSkin.MoveHandle, id, cp * editorDisplayScale + origin3, true) - origin) / editorDisplayScale;
 					
-					if (keyCode == KeyCode.Backspace || keyCode == KeyCode.Delete)
-					{
-						deletedIndex = i;
+					if (GUIUtility.keyboardControl == id && ev.type == EventType.KeyDown) {
+
+						switch (ev.keyCode) {
+							case KeyCode.Backspace: 
+							case KeyCode.Delete: {
+								GUIUtility.keyboardControl = 0;
+								GUIUtility.hotControl = 0;
+								deletedIndex = i;
+								ev.Use();
+								break;
+							}
+
+							case KeyCode.X: {
+								GUIUtility.keyboardControl = 0;
+								GUIUtility.hotControl = 0;
+								deletedIsland = islandId;
+								ev.Use();
+								break;
+							}
+
+							case KeyCode.T: {
+								if (!forceClosed) {
+									GUIUtility.keyboardControl = 0;
+									GUIUtility.hotControl = 0;
+									disconnectIsland = true;
+									ev.Use();
+									}
+								break;
+							}
+
+							case KeyCode.F: {
+								flipIsland = true;
+								GUIUtility.keyboardControl = 0;
+								GUIUtility.hotControl = 0;
+								ev.Use();
+								break;
+							}
+
+							case KeyCode.Escape: {
+								GUIUtility.hotControl = 0;
+								GUIUtility.keyboardControl = 0;
+								ev.Use();
+								break;
+							}
+						}
 					}
 					
-					if (keyCode == KeyCode.X)
-					{
-						deletedIsland = islandId;
-					}
-					
-					if (keyCode == KeyCode.T && !forceClosed)
-					{
-						disconnectIsland = true;
-					}
-					
-					if (keyCode == KeyCode.F)
-					{
-						flipIsland = true;
-					}
-					
-					cp.x = Mathf.Round(cp.x);
-					cp.y = Mathf.Round(cp.y);
+					cp.x = Mathf.Round(cp.x * 2) / 2.0f; // allow placing point at half texel
+					cp.y = Mathf.Round(cp.y * 2) / 2.0f;
 					
 					// constrain
 					cp.x = Mathf.Clamp(cp.x, 0.0f, tex.width);
@@ -299,25 +328,25 @@ namespace tk2dEditor.SpriteCollectionEditor
 			
 			// Draw top handle
 			handlePos = (pt[0] + pt[1]) * 0.5f;
-			handlePos = (tk2dGuiUtility.PositionHandle(id + 0, handlePos, 4.0f, handleInactiveColor, handleActiveColor) - origin) / editorDisplayScale;
+			handlePos = (tk2dGuiUtility.PositionHandle(id + 0, handlePos) - origin) / editorDisplayScale;
 			param.boxColliderMin.y = handlePos.y;
 			if (param.boxColliderMin.y > param.boxColliderMax.y) param.boxColliderMin.y = param.boxColliderMax.y;
 	
 			// Draw bottom handle
 			handlePos = (pt[2] + pt[3]) * 0.5f;
-			handlePos = (tk2dGuiUtility.PositionHandle(id + 1, handlePos, 4.0f, handleInactiveColor, handleActiveColor) - origin) / editorDisplayScale;
+			handlePos = (tk2dGuiUtility.PositionHandle(id + 1, handlePos) - origin) / editorDisplayScale;
 			param.boxColliderMax.y = handlePos.y;
 			if (param.boxColliderMax.y < param.boxColliderMin.y) param.boxColliderMax.y = param.boxColliderMin.y;
 	
 			// Draw left handle
 			handlePos = (pt[0] + pt[3]) * 0.5f;
-			handlePos = (tk2dGuiUtility.PositionHandle(id + 2, handlePos, 4.0f, handleInactiveColor, handleActiveColor) - origin) / editorDisplayScale;
+			handlePos = (tk2dGuiUtility.PositionHandle(id + 2, handlePos) - origin) / editorDisplayScale;
 			param.boxColliderMin.x = handlePos.x;
 			if (param.boxColliderMin.x > param.boxColliderMax.x) param.boxColliderMin.x = param.boxColliderMax.x;
 	
 			// Draw right handle
 			handlePos = (pt[1] + pt[2]) * 0.5f;
-			handlePos = (tk2dGuiUtility.PositionHandle(id + 3, handlePos, 4.0f, handleInactiveColor, handleActiveColor) - origin) / editorDisplayScale;
+			handlePos = (tk2dGuiUtility.PositionHandle(id + 3, handlePos) - origin) / editorDisplayScale;
 			param.boxColliderMax.x = handlePos.x;
 			if (param.boxColliderMax.x < param.boxColliderMin.x) param.boxColliderMax.x = param.boxColliderMin.x;
 	
@@ -340,6 +369,8 @@ namespace tk2dEditor.SpriteCollectionEditor
 		
 		void HandleKeys()
 		{
+			if (GUIUtility.keyboardControl != 0)
+				return;
 			Event evt = Event.current;
 			if (evt.type == EventType.KeyUp && evt.shift)
 			{
@@ -349,6 +380,7 @@ namespace tk2dEditor.SpriteCollectionEditor
 					case KeyCode.Q: newMode = Mode.Texture; break;
 					case KeyCode.W: newMode = Mode.Anchor; break;
 					case KeyCode.E: newMode = Mode.Collider; break;
+					case KeyCode.R: newMode = Mode.AttachPoint; break;
 					case KeyCode.N: drawColliderNormals = !drawColliderNormals; HandleUtility.Repaint(); break;
 				}
 				if (newMode != Mode.None)
@@ -357,6 +389,13 @@ namespace tk2dEditor.SpriteCollectionEditor
 					evt.Use();
 				}
 			}
+		}
+
+		public Vector2 Rotate(Vector2 v, float angle) {
+			float angleRad = angle * Mathf.Deg2Rad;
+			float cosa = Mathf.Cos(angleRad);
+			float sina = -Mathf.Sin(angleRad);
+			return new Vector2( v.x * cosa - v.y * sina, v.x * sina + v.y * cosa );
 		}
 
 		public void DrawTextureView(tk2dSpriteCollectionDefinition param, Texture2D texture)
@@ -386,7 +425,7 @@ namespace tk2dEditor.SpriteCollectionEditor
 					param.colliderType == tk2dSpriteCollectionDefinition.ColliderType.BoxCustom);
 				if (mode == Mode.Anchor && !allowAnchor) mode = Mode.Texture;
 				if (mode == Mode.Collider && !allowCollider) mode = Mode.Texture;
-				
+
 				Rect rect = GUILayoutUtility.GetRect(128.0f, 128.0f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
 				tk2dGrid.Draw(rect);
 				
@@ -430,13 +469,12 @@ namespace tk2dEditor.SpriteCollectionEditor
 				// Anchor
 				if (mode == Mode.Anchor)
 				{
-					Color handleColor = new Color(0,0,0,0.2f);
 					Color lineColor = Color.white;
 					Vector2 anchor = new Vector2(param.anchorX, param.anchorY);
 					Vector2 origin = new Vector2(textureRect.x, textureRect.y);
 					
 					int id = 99999;
-					anchor = (tk2dGuiUtility.PositionHandle(id, anchor * editorDisplayScale + origin, 12.0f, handleColor, handleColor ) - origin) / editorDisplayScale;
+					anchor = (tk2dGuiUtility.PositionHandle(id, anchor * editorDisplayScale + origin) - origin) / editorDisplayScale;
 		
 					Color oldColor = Handles.color;
 					Handles.color = lineColor;
@@ -455,6 +493,106 @@ namespace tk2dEditor.SpriteCollectionEditor
 					
 					HandleUtility.Repaint();			
 				}
+
+				if (mode == Mode.AttachPoint) {
+					Vector2 origin = new Vector2(textureRect.x, textureRect.y);
+					int id = "Mode.AttachPoint".GetHashCode();
+					foreach (tk2dSpriteDefinition.AttachPoint ap in param.attachPoints) {
+						Vector2 apPosition = new Vector2(ap.position.x, ap.position.y);
+
+						if (showAttachPointSprites) {
+							tk2dSpriteCollection.AttachPointTestSprite spriteProxy = null;
+							if (SpriteCollection.attachPointTestSprites.TryGetValue(ap.name, out spriteProxy) && spriteProxy.spriteCollection != null &&
+								spriteProxy.spriteCollection.IsValidSpriteId(spriteProxy.spriteId)) {
+								tk2dSpriteDefinition def = spriteProxy.spriteCollection.inst.spriteDefinitions[ spriteProxy.spriteId ];
+								tk2dSpriteThumbnailCache.DrawSpriteTextureInRect( textureRect, def, Color.white, ap.position, ap.angle, new Vector2(editorDisplayScale, editorDisplayScale) );
+							}
+						}
+
+						Vector2 pos = apPosition * editorDisplayScale + origin;
+						GUI.color = Color.clear; // don't actually draw the move handle center
+						apPosition = (tk2dGuiUtility.PositionHandle(id, pos) - origin) / editorDisplayScale;
+						GUI.color = Color.white;
+
+						float handleSize = 30;
+						
+						Handles.color = Color.green; Handles.DrawLine(pos, pos - Rotate(Vector2.up, ap.angle) * handleSize);
+						Handles.color = Color.red; Handles.DrawLine(pos, pos + Rotate(Vector2.right, ap.angle) * handleSize);
+
+						Handles.color = Color.white;
+						Handles.DrawWireDisc(pos, Vector3.forward, handleSize);
+
+						// rotation handle
+						Vector2 rotHandlePos = pos + Rotate(Vector2.right, ap.angle) * handleSize;
+						Vector2 newRotHandlePos = tk2dGuiUtility.Handle(tk2dEditorSkin.RotateHandle, id + 1, rotHandlePos, false);
+						if (newRotHandlePos != rotHandlePos) {
+							Vector2 deltaRot = newRotHandlePos - pos;
+							float angle = -Mathf.Atan2(deltaRot.y, deltaRot.x) * Mathf.Rad2Deg;
+							if (Event.current.control) {
+								float snapAmount = Event.current.shift ? 15 : 5;
+								angle = Mathf.Floor(angle / snapAmount) * snapAmount;
+							}
+							else if (!Event.current.shift) {
+								angle = Mathf.Floor(angle);
+							}
+							ap.angle = angle;
+						}
+
+						Rect r = new Rect(pos.x + 8, pos.y + 6, 1000, 50);
+						GUI.Label( r, ap.name, EditorStyles.whiteMiniLabel );
+
+						ap.position.x = Mathf.Round(apPosition.x);
+						ap.position.y = Mathf.Round(apPosition.y);
+						tk2dGuiUtility.SetPositionHandleValue(id, new Vector2(ap.position.x, ap.position.y));
+
+						id += 2;
+					}
+					Handles.color = Color.white;
+				}
+
+				if (mode == Mode.Texture) {
+					if (param.dice) {
+						Handles.color = Color.red;
+						Vector3 p1, p2;
+						int q, dq;
+
+						p1 = new Vector3(textureRect.x, textureRect.y, 0);
+						p2 = new Vector3(textureRect.x, textureRect.y + textureRect.height, 0);
+						q = 0;
+						dq = param.diceUnitX;
+						if (dq > 0) {
+							while (q <= texture.width) {
+								Handles.DrawLine(p1, p2);
+								int q0 = q;
+								if (q < texture.width && (q + dq) > texture.width)
+									q = texture.width;
+								else
+									q += dq;
+								p1.x += (float)(q - q0) * editorDisplayScale;
+								p2.x += (float)(q - q0) * editorDisplayScale;
+							}
+						}
+						p1 = new Vector3(textureRect.x, textureRect.y + textureRect.height, 0);
+						p2 = new Vector3(textureRect.x + textureRect.width, textureRect.y + textureRect.height, 0);
+						q = 0;
+						dq = param.diceUnitY;
+						if (dq > 0) {
+							while (q <= texture.height) {
+								Handles.DrawLine(p1, p2);
+								int q0 = q;
+								if (q < texture.height && (q + dq) > texture.height)
+									q = texture.height;
+								else
+									q += dq;
+								p1.y -= (float)(q - q0) * editorDisplayScale;
+								p2.y -= (float)(q - q0) * editorDisplayScale;
+							}
+						}
+
+						Handles.color = Color.white;
+					}
+				}
+
 				GUI.EndScrollView();
 			}
 				
@@ -463,12 +601,13 @@ namespace tk2dEditor.SpriteCollectionEditor
 			
 			GUILayout.EndVertical();
 		}
-		
+
 		public void DrawToolbar(tk2dSpriteCollectionDefinition param, Texture2D texture)
 		{
 			bool allowAnchor = param.anchor == tk2dSpriteCollectionDefinition.Anchor.Custom;
 			bool allowCollider = (param.colliderType == tk2dSpriteCollectionDefinition.ColliderType.Polygon ||
 				param.colliderType == tk2dSpriteCollectionDefinition.ColliderType.BoxCustom);
+			bool allowAttachPoint = true;
 
 			GUILayout.BeginHorizontal(EditorStyles.toolbar, GUILayout.ExpandWidth(true));
 			mode = GUILayout.Toggle((mode == Mode.Texture), new GUIContent("Sprite", "Shift+Q"), EditorStyles.toolbarButton)?Mode.Texture:mode;
@@ -476,6 +615,8 @@ namespace tk2dEditor.SpriteCollectionEditor
 				mode = GUILayout.Toggle((mode == Mode.Anchor), new GUIContent("Anchor", "Shift+W"), EditorStyles.toolbarButton)?Mode.Anchor:mode;
 			if (allowCollider)
 				mode = GUILayout.Toggle((mode == Mode.Collider), new GUIContent("Collider", "Shift+E"), EditorStyles.toolbarButton)?Mode.Collider:mode;
+			if (allowAttachPoint)
+				mode = GUILayout.Toggle((mode == Mode.AttachPoint), new GUIContent("AttachPoint", "Shift+R"), EditorStyles.toolbarButton)?Mode.AttachPoint:mode;
 			GUILayout.FlexibleSpace();
 			
 			if (tk2dGuiUtility.HasActivePositionHandle)
@@ -501,6 +642,127 @@ namespace tk2dEditor.SpriteCollectionEditor
 			GUILayout.FlexibleSpace();
 		}
 		
+		tk2dSpriteDefinition.AttachPoint editingAttachPointName = null;
+		bool showAttachPointSprites = false;
+		void AttachPointSpriteHandler(tk2dSpriteCollectionData newSpriteCollection, int newSpriteId, object callbackData) {
+			string attachPointName = (string)callbackData;
+			tk2dSpriteCollection.AttachPointTestSprite proxy = null;
+			if (SpriteCollection.attachPointTestSprites.TryGetValue(attachPointName, out proxy)) {
+				proxy.spriteCollection = newSpriteCollection;
+				proxy.spriteId = newSpriteId;
+				HandleUtility.Repaint();
+			}
+		}
+
+		public void DrawAttachPointInspector(tk2dSpriteCollectionDefinition param, Texture2D texture) {
+			// catalog all names
+			HashSet<string> apHashSet = new HashSet<string>();
+			foreach (tk2dSpriteCollectionDefinition def in SpriteCollection.textureParams) {
+				foreach (tk2dSpriteDefinition.AttachPoint currAp in def.attachPoints) {
+					apHashSet.Add( currAp.name );
+				}
+			}
+			Dictionary<string, int> apNameLookup = new Dictionary<string, int>();
+			List<string> apNames = new List<string>( apHashSet );
+			for (int i = 0; i < apNames.Count; ++i) {
+				apNameLookup.Add( apNames[i], i );
+			}
+			apNames.Add( "Create..." );
+
+			int toDelete = -1;
+			tk2dSpriteGuiUtility.showOpenEditShortcuts = false;
+			tk2dSpriteDefinition.AttachPoint newEditingAttachPointName = editingAttachPointName;
+			int apIdx = 0;
+			foreach (var ap in param.attachPoints) {
+				GUILayout.BeginHorizontal();
+
+				if (editingAttachPointName == ap) {
+					if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return) {
+						newEditingAttachPointName = null;
+						HandleUtility.Repaint();
+						GUIUtility.keyboardControl = 0;
+					}
+					ap.name = GUILayout.TextField(ap.name);
+				}
+				else {
+					int sel = EditorGUILayout.Popup(apNameLookup[ap.name], apNames.ToArray());
+					if (sel == apNames.Count - 1) {
+						newEditingAttachPointName = ap;
+						HandleUtility.Repaint();
+					}
+					else {
+						ap.name = apNames[sel];
+					}
+				}
+
+				ap.angle = EditorGUILayout.FloatField(ap.angle, GUILayout.Width(45));
+
+				if (GUILayout.Button("x", GUILayout.Width(22))) {
+					toDelete = apIdx;
+				}
+				GUILayout.EndHorizontal();
+
+				if (showAttachPointSprites) {
+					bool pushGUIEnabled = GUI.enabled;
+					
+					string tmpName;
+					if (editingAttachPointName != ap) {
+						tmpName = ap.name;
+					} else {
+						tmpName = "";
+						GUI.enabled = false;
+					}
+
+					tk2dSpriteCollection.AttachPointTestSprite spriteProxy = null;
+					if (!SpriteCollection.attachPointTestSprites.TryGetValue(tmpName, out spriteProxy)) {
+						spriteProxy = new tk2dSpriteCollection.AttachPointTestSprite();
+						SpriteCollection.attachPointTestSprites.Add( tmpName, spriteProxy );
+					}
+
+					tk2dSpriteGuiUtility.SpriteSelector( spriteProxy.spriteCollection, spriteProxy.spriteId, AttachPointSpriteHandler, tmpName );
+					
+					GUI.enabled = pushGUIEnabled;
+				}
+
+				editingAttachPointName = newEditingAttachPointName;
+				++apIdx;
+			}
+
+			if (GUILayout.Button("Add AttachPoint")) {
+				// Find an unused attach point name
+				string unused = "";
+				foreach (string n in apHashSet) {
+					bool used = false;
+					for (int i = 0; i < param.attachPoints.Count; ++i) {
+						if (n == param.attachPoints[i].name) {
+							used = true;
+							break;
+						}
+					}
+					if (!used) {
+						unused = n;
+						break;
+					}
+				}
+				tk2dSpriteDefinition.AttachPoint ap = new tk2dSpriteDefinition.AttachPoint();
+				ap.name = unused;
+				ap.position = Vector3.zero;
+				param.attachPoints.Add(ap);
+
+				if (unused == "") {
+					editingAttachPointName = ap;
+				}
+			}
+
+			if (toDelete != -1) {
+				param.attachPoints.RemoveAt(toDelete);
+				HandleUtility.Repaint();
+			}
+
+			showAttachPointSprites = GUILayout.Toggle(showAttachPointSprites, "Preview", "button");
+			tk2dSpriteGuiUtility.showOpenEditShortcuts = true;
+		}
+
 		public void DrawTextureInspector(tk2dSpriteCollectionDefinition param, Texture2D texture)
 		{
 			if (mode == Mode.Collider && param.colliderType == tk2dSpriteCollectionDefinition.ColliderType.Polygon)
@@ -532,7 +794,9 @@ namespace tk2dEditor.SpriteCollectionEditor
 										  "\nPress C - create island at cursor" + 
 							              "\nClick hold point + F - flip island", tk2dGuiUtility.WarningLevel.Info);
 			}
+			if (mode == Mode.AttachPoint) {
+				DrawAttachPointInspector( param, texture );
+			}
 		}
 	}
-	
 }

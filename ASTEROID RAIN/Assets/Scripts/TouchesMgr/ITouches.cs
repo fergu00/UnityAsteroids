@@ -90,21 +90,20 @@ public class ITouches
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 	public static ITouch[] GetTouches ()
 	{
-		if(Input.multiTouchEnabled)
+		//If We have more than One touchCount we have multitouch enabled
+		if(Input.touchCount > 0)
 		{
-			if(Input.touchCount > 0)
+			ITouch[] touches = new ITouch[Input.touchCount];
+			int iTouch = 0;
+			foreach(Touch t in Input.touches)
 			{
-				ITouch[] touches = new ITouch[Input.touchCount];
-				int iTouch = 0;
-				foreach(Touch t in Input.touches)
-				{
-					touches[iTouch++] = new ITouch(t);
-				}
-				return touches;
+				touches[iTouch++] = new ITouch(t);
 			}
+			return touches;
 		}
 		else
 		{
+			//lets check if we have interacting with the mouse Buttons
 			if(Input.GetMouseButtonDown(0))
 			{
 				ITouch[] touches = new ITouch[1];
@@ -124,7 +123,6 @@ public class ITouches
 				return touches;
 			}
 		}
-		
 		return null;
 	}
 }

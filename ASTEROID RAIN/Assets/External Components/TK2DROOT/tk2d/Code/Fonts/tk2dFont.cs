@@ -15,11 +15,13 @@ public class tk2dFont : MonoBehaviour
 	public bool proxyFont = false;
 
 	[HideInInspector]
-	public bool useTk2dCamera = false;
+	private bool useTk2dCamera = false;
 	[HideInInspector]
-	public int targetHeight = 640;
+	private int targetHeight = 640;
 	[HideInInspector]
-	public float targetOrthoSize = 1.0f;
+	private float targetOrthoSize = 1.0f;
+
+	public tk2dSpriteCollectionSize sizeDef = tk2dSpriteCollectionSize.Default();
 	
 	public int gradientCount = 1;
 	
@@ -31,4 +33,20 @@ public class tk2dFont : MonoBehaviour
 	public int charPadX = 0;
 	
 	public tk2dFontData data;
+
+	public static int CURRENT_VERSION = 1;
+	public int version = 0;
+
+	public void Upgrade() {
+		if (version >= CURRENT_VERSION) {
+			return;
+		}
+		Debug.Log("Font '" + this.name + "' - Upgraded from version " + version.ToString());
+
+		if (version == 0) {
+			sizeDef.CopyFromLegacy( useTk2dCamera, targetOrthoSize, targetHeight );
+		}
+
+		version = CURRENT_VERSION;
+	}
 }

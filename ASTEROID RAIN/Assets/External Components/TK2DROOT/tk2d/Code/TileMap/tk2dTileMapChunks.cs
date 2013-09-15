@@ -79,6 +79,9 @@ namespace tk2dRuntime.TileMap
 	}
 	
 	[System.Serializable]
+	/// <summary>
+	/// Color channel.
+	/// </summary>
 	public class ColorChannel
 	{
 		public ColorChannel(int width, int height, int divX, int divY)
@@ -101,8 +104,10 @@ namespace tk2dRuntime.TileMap
 		
 		public ColorChunk FindChunkAndCoordinate(int x, int y, out int offset)
 		{
-			int cellX = Mathf.Max(x - 1, 0) / divX;
-			int cellY = Mathf.Max(y - 1, 0) / divY;
+			int cellX = x / divX;
+			int cellY = y / divY;
+			cellX = Mathf.Clamp(cellX, 0, numColumns - 1);
+			cellY = Mathf.Clamp(cellY, 0, numRows - 1);
 			int idx = cellY * numColumns + cellX;
 			var chunk = chunks[idx];
 			int localX = x - cellX * divX;
@@ -110,7 +115,13 @@ namespace tk2dRuntime.TileMap
 			offset = localY * (divX + 1) + localX;
 			return chunk;
 		}
-		
+
+		/// <summary>
+		/// Gets the color.
+		/// </summary>
+		/// <returns>The color.</returns>
+		/// <param name="x">The x coordinate.</param>
+		/// <param name="y">The y coordinate.</param>
 		public Color GetColor(int x, int y)
 		{
 			if (IsEmpty)
@@ -134,7 +145,13 @@ namespace tk2dRuntime.TileMap
 					chunk.colors[i] = clearColor;
 			}
 		}
-		
+
+		/// <summary>
+		/// Sets the color.
+		/// </summary>
+		/// <param name="x">The x coordinate.</param>
+		/// <param name="y">The y coordinate.</param>
+		/// <param name="color">Color.</param>
 		public void SetColor(int x, int y, Color color)
 		{
 			if (IsEmpty)
@@ -165,6 +182,7 @@ namespace tk2dRuntime.TileMap
 				localX = x - cx * divX;
 				localY = y - cellY * divY;
 				chunk.colors[localY * cellLocalWidth + localX] = color;
+				chunk.Dirty = true;
 			}
 			if (needY)
 			{
@@ -173,6 +191,7 @@ namespace tk2dRuntime.TileMap
 				localX = x - cellX * divX;
 				localY = y - cy * divY;
 				chunk.colors[localY * cellLocalWidth + localX] = color;
+				chunk.Dirty = true;
 			}
 			if (needX && needY)
 			{
@@ -182,6 +201,7 @@ namespace tk2dRuntime.TileMap
 				localX = x - cx * divX;
 				localY = y - cy * divY;
 				chunk.colors[localY * cellLocalWidth + localX] = color;
+				chunk.Dirty = true;
 			}
 		}
 		
@@ -214,7 +234,11 @@ namespace tk2dRuntime.TileMap
 			foreach (var chunk in chunks)
 				chunk.Dirty = false;
 		}
-		
+
+		/// <summary>
+		/// Clear the specified color.
+		/// </summary>
+		/// <param name="color">Color.</param>
 		public void Clear(Color color)
 		{
 			clearColor = color;
@@ -280,6 +304,9 @@ namespace tk2dRuntime.TileMap
 	}
 	
 	[System.Serializable]
+	/// <summary>
+	/// Layer.
+	/// </summary>
 	public class Layer
 	{
 		public int hash;
@@ -331,24 +358,95 @@ namespace tk2dRuntime.TileMap
 			offset = localY * divX + localX;
 			return chunk;
 		}
-		
-		public void SetTile(int x, int y, int spriteId)
-		{
+
+		const int tileMask = 0x00ffffff;
+		const int flagMask = unchecked((int)0xff000000);
+
+		private bool GetRawTileValue(int x, int y, ref int value) {
 			int offset;
-			var chunk = FindChunkAndCoordinate(x, y, out offset);
-			CreateChunk(chunk);
-			chunk.spriteIds[offset] = spriteId;
-			chunk.Dirty = true;
-		}
-		
-		public int GetTile(int x, int y)
-		{
-			int offset;
-			var chunk = FindChunkAndCoordinate(x, y, out offset);
+			SpriteChunk chunk = FindChunkAndCoordinate(x, y, out offset);
 			if (chunk.spriteIds == null || chunk.spriteIds.Length == 0)
-				return -1;
-			return chunk.spriteIds[offset];
+				return false;
+			value = chunk.spriteIds[offset];
+			return true;
 		}
+
+		private void SetRawTileValue(int x, int y, int value) {
+			int offset;
+			SpriteChunk chunk = FindChunkAndCoordinate(x, y, out offset);
+			if (chunk != null) {
+				CreateChunk(chunk);
+				chunk.spriteIds[offset] = value;
+				chunk.Dirty = true;
+			}
+		}
+
+		// Get functions
+
+		/// <summary>Gets the tile at x, y</summary> 
+		/// <returns>The tile - either a sprite Id or -1 if the tile is empty.</returns>
+		public int GetTile(int x, int y) {
+			int rawTileValue = 0;
+			if (GetRawTileValue(x, y, ref rawTileValue)) {
+				if (rawTileValue != -1) {
+					return rawTileValue & tileMask;
+				}
+			}
+			return -1;
+		}
+
+		/// <summary>Gets the tile flags at x, y</summary> 
+		/// <returns>The tile flags - a combination of tk2dTileFlags</returns>
+		public tk2dTileFlags GetTileFlags(int x, int y) {
+			int rawTileValue = 0;
+			if (GetRawTileValue(x, y, ref rawTileValue)) {
+				if (rawTileValue != -1) {
+					return (tk2dTileFlags)(rawTileValue & flagMask);
+				}
+			}
+			return tk2dTileFlags.None;
+		}
+
+		/// <summary>Gets the raw tile value at x, y</summary> 
+		/// <returns>Either a combination of Tile and flags or -1 if the tile is empty</returns>
+		public int GetRawTile(int x, int y) {
+			int rawTileValue = 0;
+			if (GetRawTileValue(x, y, ref rawTileValue)) {
+				return rawTileValue;
+			}
+			return -1;
+		}
+
+		// Set functions
+
+		/// <summary>Sets the tile at x, y - either a sprite Id or -1 if the tile is empty.</summary> 
+		public void SetTile(int x, int y, int tile) {
+			tk2dTileFlags currentFlags = GetTileFlags(x, y);
+			int rawTileValue = (tile == -1) ? -1 : (tile | (int)currentFlags);
+			SetRawTileValue(x, y, rawTileValue);
+		}
+
+		/// <summary>Sets the tile flags at x, y - a combination of tk2dTileFlags</summary> 
+		public void SetTileFlags(int x, int y, tk2dTileFlags flags) {
+			int currentTile = GetTile(x, y);
+			if (currentTile != -1) {
+				int rawTileValue = currentTile | (int)flags;
+				SetRawTileValue(x, y, rawTileValue);
+			}
+		}
+
+		/// <summary>Clears the tile at x, y</summary> 
+		public void ClearTile(int x, int y) {
+			SetTile(x, y, -1);
+		}
+
+		/// <summary>Sets the raw tile value at x, y</summary> 
+		/// <returns>Either a combination of Tile and flags or -1 if the tile is empty</returns>
+		public void SetRawTile(int x, int y, int rawTile) {
+			SetRawTileValue(x, y, rawTile);
+		}
+
+
 		
 		void CreateChunk(SpriteChunk chunk)
 		{

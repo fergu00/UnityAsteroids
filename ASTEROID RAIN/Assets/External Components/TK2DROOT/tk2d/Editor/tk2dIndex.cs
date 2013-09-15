@@ -62,7 +62,7 @@ public class tk2dGenericIndexItem
 public class tk2dIndex : ScriptableObject
 {
 	public int version = 0;
-	public static int CURRENT_VERSION = 3;
+	public static int CURRENT_VERSION = 4;
 
 	[SerializeField] List<tk2dGenericIndexItem> spriteAnimationIndex = new List<tk2dGenericIndexItem>();
 	[SerializeField] List<tk2dGenericIndexItem> fontIndex = new List<tk2dGenericIndexItem>();
@@ -142,6 +142,12 @@ public class tk2dIndex : ScriptableObject
 				indexEntry.spriteTextureGUIDs[i] = "";
 				indexEntry.spriteTextureTimeStamps[i] = "";
 			}
+		}
+
+		if (sc.spriteCollectionPlatforms.Length > 0) {
+			indexEntry.spriteNames = new string[] { "dummy" };
+			indexEntry.spriteTextureGUIDs = new string[] { "" };
+			indexEntry.spriteTextureTimeStamps = new string[] { "0" };
 		}
 
 		if (!existing)

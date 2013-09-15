@@ -2,6 +2,7 @@ using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 
+[CanEditMultipleObjects]
 [CustomEditor(typeof(tk2dTiledSprite))]
 class tk2dTiledSpriteEditor : tk2dSpriteEditor
 {
@@ -81,48 +82,80 @@ class tk2dTiledSpriteEditor : tk2dSpriteEditor
 		EditorGUILayout.EndVertical();
     }
 
+	public new void OnSceneGUI() {
+		if (tk2dPreferences.inst.enableSpriteHandles == false) return;
+
+		tk2dTiledSprite spr = (tk2dTiledSprite)target;
+
+		Transform t = spr.transform;
+		var sprite = spr.CurrentSprite;
+
+		if (sprite == null) {
+			return;
+		}
+
+		Vector2 totalMeshSize = new Vector2( spr.dimensions.x * sprite.texelSize.x * spr.scale.x, spr.dimensions.y * sprite.texelSize.y * spr.scale.y );
+		Vector2 anchorOffset = tk2dSceneHelper.GetAnchorOffset(totalMeshSize, spr.anchor);
+
+		{
+			Vector3 v = new Vector3( anchorOffset.x, anchorOffset.y, 0 );
+			Vector3 d = totalMeshSize;
+			Rect rect0 = new Rect(v.x, v.y, d.x, d.y);
+
+			Handles.color = new Color(1,1,1, 0.5f);
+			tk2dSceneHelper.DrawRect(rect0, t);
+
+			Handles.BeginGUI();
+			// Resize handles 
+			if (tk2dSceneHelper.RectControlsToggle ()) {
+				EditorGUI.BeginChangeCheck();
+				Rect resizeRect = tk2dSceneHelper.RectControl( 123192, rect0, t );
+				if (EditorGUI.EndChangeCheck ()) {
+					Undo.RegisterUndo (new Object[] {t, spr}, "Resize");
+					spr.ReshapeBounds(new Vector3(resizeRect.xMin, resizeRect.yMin) - new Vector3(rect0.xMin, rect0.yMin),
+						new Vector3(resizeRect.xMax, resizeRect.yMax) - new Vector3(rect0.xMax, rect0.yMax));
+					EditorUtility.SetDirty(spr);
+				}
+			}
+
+			// Rotate handles
+			if (!tk2dSceneHelper.RectControlsToggle ()) {
+				EditorGUI.BeginChangeCheck();
+				List<int> hidePts = tk2dSceneHelper.getAnchorHidePtList(spr.anchor, rect0, t);
+				float theta = tk2dSceneHelper.RectRotateControl( 456384, rect0, t, hidePts );
+				if (EditorGUI.EndChangeCheck()) {
+					Undo.RegisterUndo(t, "Rotate");
+					if (Mathf.Abs(theta) > Mathf.Epsilon) {
+						t.Rotate(t.forward, theta, Space.World);
+					}
+				}
+			}
+
+			Handles.EndGUI();
+
+			// Sprite selecting
+			tk2dSceneHelper.HandleSelectSprites();
+
+			// Sprite moving (translation)
+			tk2dSceneHelper.HandleMoveSprites(t, new Rect(v.x, v.y, d.x, d.y));
+		}
+
+    	if (GUI.changed) {
+    		EditorUtility.SetDirty(target);
+    	}
+	}
 
     [MenuItem("GameObject/Create Other/tk2d/Tiled Sprite", false, 12901)]
     static void DoCreateSlicedSpriteObject()
     {
-		tk2dSpriteCollectionData sprColl = null;
-		if (sprColl == null)
-		{
-			// try to inherit from other Sprites in scene
-			tk2dSprite spr = GameObject.FindObjectOfType(typeof(tk2dSprite)) as tk2dSprite;
-			if (spr)
-			{
-				sprColl = spr.Collection;
-			}
-		}
-
-		if (sprColl == null)
-		{
-			tk2dSpriteCollectionIndex[] spriteCollections = tk2dEditorUtility.GetOrCreateIndex().GetSpriteCollectionIndex();
-			foreach (var v in spriteCollections)
-			{
-				GameObject scgo = AssetDatabase.LoadAssetAtPath(AssetDatabase.GUIDToAssetPath(v.spriteCollectionDataGUID), typeof(GameObject)) as GameObject;
-				var sc = scgo.GetComponent<tk2dSpriteCollectionData>();
-				if (sc != null && sc.spriteDefinitions != null && sc.spriteDefinitions.Length > 0)
-				{
-					sprColl = sc;
-					break;
-				}
-			}
-
-			if (sprColl == null)
-			{
-				EditorUtility.DisplayDialog("Create Tiled Sprite", "Unable to create tiled sprite as no SpriteCollections have been found.", "Ok");
-				return;
-			}
-		}
-
-		GameObject go = tk2dEditorUtility.CreateGameObjectInScene("Tiled Sprite");
-		tk2dTiledSprite sprite = go.AddComponent<tk2dTiledSprite>();
-		sprite.SetSprite(sprColl, sprColl.FirstValidDefinitionIndex);
-		sprite.Build();
-		Selection.activeGameObject = go;
-		Undo.RegisterCreatedObjectUndo(go, "Create Tiled Sprite");
+		tk2dSpriteGuiUtility.GetSpriteCollectionAndCreate( (sprColl) => {
+			GameObject go = tk2dEditorUtility.CreateGameObjectInScene("Tiled Sprite");
+			tk2dTiledSprite sprite = go.AddComponent<tk2dTiledSprite>();
+			sprite.SetSprite(sprColl, sprColl.FirstValidDefinitionIndex);
+			sprite.Build();
+			Selection.activeGameObject = go;
+			Undo.RegisterCreatedObjectUndo(go, "Create Tiled Sprite");
+		} );
     }
 }
 

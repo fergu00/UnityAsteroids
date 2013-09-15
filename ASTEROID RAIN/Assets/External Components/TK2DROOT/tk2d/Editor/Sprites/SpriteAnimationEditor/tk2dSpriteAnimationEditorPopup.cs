@@ -86,6 +86,8 @@ public class tk2dSpriteAnimationEditorPopup : EditorWindow
 	{
 		if (clipEditor != null)
 			clipEditor.Destroy();
+
+		tk2dEditorSkin.Done();
 	}
 
 	public void ClipNameChanged(tk2dSpriteAnimationClip clip, int param)
@@ -196,10 +198,16 @@ public class tk2dSpriteAnimationEditorPopup : EditorWindow
 	void FilterClips()
 	{
 		filteredClips = new List<tk2dSpriteAnimationClip>(allClips.Count);
-		if (searchFilter.Length == 0)
-			filteredClips = (from clip in allClips where !clip.Empty orderby clip.name select clip).ToList();
-		else
-			filteredClips = (from clip in allClips where !clip.Empty && Contains(clip.name, searchFilter) orderby clip.name select clip).ToList();
+		if (searchFilter.Length == 0) {
+			filteredClips = (from clip in allClips where !clip.Empty select clip)
+							.OrderBy( a => a.name, new tk2dEditor.Shared.NaturalComparer() )
+							.ToList();
+		}
+		else {
+			filteredClips = (from clip in allClips where !clip.Empty && Contains(clip.name, searchFilter) select clip)
+							.OrderBy( a => a.name, new tk2dEditor.Shared.NaturalComparer() )
+							.ToList();
+		}
 	}
 
 	void Commit()

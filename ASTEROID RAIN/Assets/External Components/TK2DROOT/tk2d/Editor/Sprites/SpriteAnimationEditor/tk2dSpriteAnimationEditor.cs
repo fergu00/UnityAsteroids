@@ -5,6 +5,12 @@ using System.Collections.Generic;
 [CustomEditor(typeof(tk2dSpriteAnimation))]
 class tk2dSpriteAnimationEditor : Editor
 {
+    public static bool viewData = false;
+
+    void OnEnable() {
+        viewData = false;
+    }
+
     public override void OnInspectorGUI()
     {
         tk2dSpriteAnimation anim = (tk2dSpriteAnimation)target;
@@ -23,9 +29,20 @@ class tk2dSpriteAnimationEditor : Editor
             GUILayout.EndHorizontal();
         }
 
-		GUILayout.Space(64);
+        if (viewData) {
+            GUILayout.BeginVertical("box");
+            DrawDefaultInspector();
+            GUILayout.EndVertical();
+        }
+
+        GUILayout.Space(64);
 	}
 	
+    [MenuItem("CONTEXT/tk2dSpriteAnimation/View data")]
+    static void ToggleViewData() {
+        tk2dSpriteAnimationEditor.viewData = true;
+    }
+
 	[MenuItem("Assets/Create/tk2d/Sprite Animation", false, 10001)]
     static void DoAnimationCreate()
     {

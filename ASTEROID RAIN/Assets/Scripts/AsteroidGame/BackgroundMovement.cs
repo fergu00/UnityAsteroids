@@ -46,10 +46,10 @@ public class BackgroundMovement : MonoBehaviour
 		m_movementPerSecond = m_scaleY / TimeMgr.m_secondsToPlay;
 		
 		//Reset Position of The background if the size of the camera is more than 1
-		if(Camera.mainCamera.orthographicSize > 1)
+		if(Camera.main.orthographicSize > 1)
 		{
 			m_background.transform.localScale = new Vector3(m_background.transform.localScale.x,
-				m_background.transform.localScale.y + (Camera.mainCamera.orthographicSize - 1),
+				m_background.transform.localScale.y + (Camera.main.orthographicSize - 1),
 				m_background.transform.localScale.z);
 		}
 		

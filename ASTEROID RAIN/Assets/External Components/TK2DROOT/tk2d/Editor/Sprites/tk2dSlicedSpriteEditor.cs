@@ -14,17 +14,20 @@ class tk2dSlicedSpriteEditor : tk2dSpriteEditor
 	}
 
 	public override void OnInspectorGUI()
-    {
-        tk2dSlicedSprite sprite = (tk2dSlicedSprite)target;
+	{
+		tk2dSlicedSprite sprite = (tk2dSlicedSprite)target;
 		base.OnInspectorGUI();
 		
 		if (sprite.Collection == null)
 			return;
 
 		
-		EditorGUILayout.BeginVertical();
-		
 		var spriteData = sprite.GetCurrentSpriteDef();
+		if (spriteData == null) {
+			return;
+		}
+		
+		EditorGUILayout.BeginVertical();
 		
 		// need raw extents (excluding scale)
 		Vector3 extents = spriteData.boundsData[1];
@@ -49,34 +52,19 @@ class tk2dSlicedSpriteEditor : tk2dSpriteEditor
 		
 		if (!editBorderInFractions)
 		{
-			if (sprite.transform.localScale == Vector3.one && sprite.legacyMode)
-			{
-				Vector2 scalePixelUnits = new Vector2(spritePixelMultiplier.x * sprite.scale.x, spritePixelMultiplier.y * sprite.scale.y);
-				Vector2 scalePixelUnitsChanged = EditorGUILayout.Vector2Field("Scale (Pixel Units)", scalePixelUnits);
-				if (scalePixelUnits != scalePixelUnitsChanged)
-				{
-					Undo.RegisterUndo(targetSlicedSprites, "Sliced Sprite Scale");
-					foreach (tk2dSlicedSprite spr in targetSlicedSprites) {
-						spr.scale = new Vector3(scalePixelUnitsChanged.x / spritePixelMultiplier.x, scalePixelUnitsChanged.y / spritePixelMultiplier.y, sprite.scale.z);
-					}
+			Vector2 newDimensions = EditorGUILayout.Vector2Field("Dimensions (Pixel Units)", sprite.dimensions);
+			if (newDimensions != sprite.dimensions) {
+				Undo.RegisterUndo(targetSlicedSprites, "Sliced Sprite Dimensions");
+				foreach (tk2dSlicedSprite spr in targetSlicedSprites) {
+					spr.dimensions = newDimensions;
 				}
 			}
-			else
-			{
-				Vector2 newDimensions = EditorGUILayout.Vector2Field("Dimensions (Pixel Units)", sprite.dimensions);
-				if (newDimensions != sprite.dimensions) {
-					Undo.RegisterUndo(targetSlicedSprites, "Sliced Sprite Dimensions");
-					foreach (tk2dSlicedSprite spr in targetSlicedSprites) {
-						spr.dimensions = newDimensions;
-					}
-				}
-				
-				tk2dSlicedSprite.Anchor newAnchor = (tk2dSlicedSprite.Anchor)EditorGUILayout.EnumPopup("Anchor", sprite.anchor);
-				if (newAnchor != sprite.anchor) {
-					Undo.RegisterUndo(targetSlicedSprites, "Sliced Sprite Anchor");
-					foreach (tk2dSlicedSprite spr in targetSlicedSprites) {
-						spr.anchor = newAnchor;
-					}
+			
+			tk2dSlicedSprite.Anchor newAnchor = (tk2dSlicedSprite.Anchor)EditorGUILayout.EnumPopup("Anchor", sprite.anchor);
+			if (newAnchor != sprite.anchor) {
+				Undo.RegisterUndo(targetSlicedSprites, "Sliced Sprite Anchor");
+				foreach (tk2dSlicedSprite spr in targetSlicedSprites) {
+					spr.anchor = newAnchor;
 				}
 			}
 			
@@ -151,50 +139,76 @@ class tk2dSlicedSpriteEditor : tk2dSpriteEditor
 		}
 
 		EditorGUILayout.EndVertical();
-    }
+	}
 
-    [MenuItem("GameObject/Create Other/tk2d/Sliced Sprite", false, 12901)]
-    static void DoCreateSlicedSpriteObject()
-    {
-		tk2dSpriteCollectionData sprColl = null;
-		if (sprColl == null)
-		{
-			// try to inherit from other Sprites in scene
-			tk2dSprite spr = GameObject.FindObjectOfType(typeof(tk2dSprite)) as tk2dSprite;
-			if (spr)
-			{
-				sprColl = spr.Collection;
+	public new void OnSceneGUI() {
+		if (tk2dPreferences.inst.enableSpriteHandles == false) return;
+
+		tk2dSlicedSprite spr = (tk2dSlicedSprite)target;
+		var sprite = spr.CurrentSprite;
+		if (sprite == null) {
+			return;
+		}
+		
+		Transform t = spr.transform;
+		Vector2 meshSize = new Vector2(spr.dimensions.x * sprite.texelSize.x * spr.scale.x, spr.dimensions.y * sprite.texelSize.y * spr.scale.y);
+		Vector2 localRectOrig = tk2dSceneHelper.GetAnchorOffset(meshSize, spr.anchor);
+		Rect localRect = new Rect(localRectOrig.x, localRectOrig.y, meshSize.x, meshSize.y);
+
+		// Draw rect outline
+		Handles.color = new Color(1,1,1,0.5f);
+		tk2dSceneHelper.DrawRect (localRect, t);
+
+		Handles.BeginGUI ();
+
+		// Resize handles
+		if (tk2dSceneHelper.RectControlsToggle ()) {
+			EditorGUI.BeginChangeCheck ();
+			Rect resizeRect = tk2dSceneHelper.RectControl(123192, localRect, t);
+			if (EditorGUI.EndChangeCheck ()) {
+				Undo.RegisterUndo (new Object[] {t, spr}, "Resize");
+				spr.ReshapeBounds(new Vector3(resizeRect.xMin, resizeRect.yMin) - new Vector3(localRect.xMin, localRect.yMin),
+					new Vector3(resizeRect.xMax, resizeRect.yMax) - new Vector3(localRect.xMax, localRect.yMax));
+				EditorUtility.SetDirty(spr);
 			}
 		}
-
-		if (sprColl == null)
-		{
-			tk2dSpriteCollectionIndex[] spriteCollections = tk2dEditorUtility.GetOrCreateIndex().GetSpriteCollectionIndex();
-			foreach (var v in spriteCollections)
-			{
-				GameObject scgo = AssetDatabase.LoadAssetAtPath(AssetDatabase.GUIDToAssetPath(v.spriteCollectionDataGUID), typeof(GameObject)) as GameObject;
-				var sc = scgo.GetComponent<tk2dSpriteCollectionData>();
-				if (sc != null && sc.spriteDefinitions != null && sc.spriteDefinitions.Length > 0)
-				{
-					sprColl = sc;
-					break;
+		// Rotate handles
+		if (!tk2dSceneHelper.RectControlsToggle ()) {
+			EditorGUI.BeginChangeCheck();
+			List<int> hidePts = tk2dSceneHelper.getAnchorHidePtList(spr.anchor, localRect, t);
+			float theta = tk2dSceneHelper.RectRotateControl( 456384, localRect, t, hidePts );
+			if (EditorGUI.EndChangeCheck()) {
+				Undo.RegisterUndo(t, "Rotate");
+				if (Mathf.Abs(theta) > Mathf.Epsilon) {
+					t.Rotate(t.forward, theta, Space.World);
 				}
 			}
-
-			if (sprColl == null)
-			{
-				EditorUtility.DisplayDialog("Create Sliced Sprite", "Unable to create sliced sprite as no SpriteCollections have been found.", "Ok");
-				return;
-			}
 		}
 
-		GameObject go = tk2dEditorUtility.CreateGameObjectInScene("Sliced Sprite");
-		tk2dSlicedSprite sprite = go.AddComponent<tk2dSlicedSprite>();
-		sprite.legacyMode = false;
-		sprite.SwitchCollectionAndSprite(sprColl, sprColl.FirstValidDefinitionIndex);
-		sprite.Build();
-		Selection.activeGameObject = go;
-		Undo.RegisterCreatedObjectUndo(go, "Create Sliced Sprite");
-    }
+		Handles.EndGUI ();
+
+		// Sprite selecting
+		tk2dSceneHelper.HandleSelectSprites();
+
+		// Move targeted sprites
+		tk2dSceneHelper.HandleMoveSprites(t, localRect);
+
+    	if (GUI.changed) {
+    		EditorUtility.SetDirty(target);
+    	}
+	}
+
+	[MenuItem("GameObject/Create Other/tk2d/Sliced Sprite", false, 12901)]
+	static void DoCreateSlicedSpriteObject()
+	{
+		tk2dSpriteGuiUtility.GetSpriteCollectionAndCreate( (sprColl) => {
+			GameObject go = tk2dEditorUtility.CreateGameObjectInScene("Sliced Sprite");
+			tk2dSlicedSprite sprite = go.AddComponent<tk2dSlicedSprite>();
+			sprite.SetSprite(sprColl, sprColl.FirstValidDefinitionIndex);
+			sprite.Build();
+			Selection.activeGameObject = go;
+			Undo.RegisterCreatedObjectUndo(go, "Create Sliced Sprite");
+		} );
+	}
 }
 

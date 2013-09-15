@@ -30,7 +30,7 @@ public class Global : MonoBehaviour
 	{
 		Random.seed++;
 		int posRandomInPixels = Random.Range(0,Screen.width);
-		float worldWidth = (Screen.width * 2.0f * Camera.mainCamera.orthographicSize) / Screen.height;
+		float worldWidth = (Screen.width * 2.0f * Camera.main.orthographicSize) / Screen.height;
 		float worldPosToCreateObject = worldWidth/2 -((posRandomInPixels * worldWidth)/Screen.width);
 		return worldPosToCreateObject;
 	}

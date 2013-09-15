@@ -4,15 +4,13 @@ using System.Collections;
 
 public class tk2dSpriteAnimationPreview 
 {
-	tk2dSpriteThumbnailCache spriteThumbnailRenderer = new tk2dSpriteThumbnailCache();
-
 	private void Init()
 	{
 	}
 
 	public void Destroy()
 	{
-		spriteThumbnailRenderer.Destroy();
+		tk2dSpriteThumbnailCache.Done();
 		tk2dGrid.Done();
 	}
 
@@ -82,7 +80,7 @@ public class tk2dSpriteAnimationPreview
 		// Draw sprite
 		if (sprite != null)
 		{
-			spriteThumbnailRenderer.DrawSpriteTextureCentered(r, sprite, translate, scale, Color.white);
+			tk2dSpriteThumbnailCache.DrawSpriteTextureCentered(r, sprite, translate, scale, Color.white);
 		}
 	}
 }

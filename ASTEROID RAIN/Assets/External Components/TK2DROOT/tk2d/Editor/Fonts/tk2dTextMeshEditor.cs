@@ -33,6 +33,10 @@ class tk2dTextMeshEditor : Editor
 		}
 	}
 
+	void OnDestroy() {
+		tk2dEditorSkin.Done();
+	}
+
 	// Draws the word wrap GUI
 	void DrawWordWrapSceneGUI(tk2dTextMesh textMesh)
 	{
@@ -105,6 +109,73 @@ class tk2dTextMeshEditor : Editor
 		{
 			DrawWordWrapSceneGUI(textMesh);
 		}
+
+		if (tk2dPreferences.inst.enableSpriteHandles == true) {
+		
+			MeshFilter meshFilter = textMesh.GetComponent<MeshFilter>();
+			if (!meshFilter || meshFilter.sharedMesh == null) {
+				return;
+			}
+			Transform t = textMesh.transform;
+			Bounds b = meshFilter.sharedMesh.bounds;
+			Rect localRect = new Rect(b.min.x, b.min.y, b.size.x, b.size.y);
+			
+			// Draw rect outline
+			Handles.color = new Color(1,1,1,0.5f);
+			tk2dSceneHelper.DrawRect (localRect, t);
+			
+			Handles.BeginGUI ();
+			// Resize handles
+			if (tk2dSceneHelper.RectControlsToggle ()) {
+				EditorGUI.BeginChangeCheck ();
+				Rect resizeRect = tk2dSceneHelper.RectControl (132546, localRect, t);
+				if (EditorGUI.EndChangeCheck ()) {
+					Vector3 newScale = new Vector3 (textMesh.scale.x * (resizeRect.width / localRect.width),
+					                                textMesh.scale.y * (resizeRect.height / localRect.height));
+					float scaleMin = 0.001f;
+					if (textMesh.scale.x > 0.0f && newScale.x < scaleMin) newScale.x = scaleMin;
+					if (textMesh.scale.x < 0.0f && newScale.x > -scaleMin) newScale.x = -scaleMin;
+					if (textMesh.scale.y > 0.0f && newScale.y < scaleMin) newScale.y = scaleMin;
+					if (textMesh.scale.y < 0.0f && newScale.y > -scaleMin) newScale.y = -scaleMin;
+					if (newScale != textMesh.scale) {
+						Undo.RegisterUndo (new Object[] {t, textMesh}, "Resize");
+						float factorX = (Mathf.Abs (textMesh.scale.x) > Mathf.Epsilon) ? (newScale.x / textMesh.scale.x) : 0.0f;
+						float factorY = (Mathf.Abs (textMesh.scale.y) > Mathf.Epsilon) ? (newScale.y / textMesh.scale.y) : 0.0f;
+						Vector3 offset = new Vector3(resizeRect.xMin - localRect.xMin * factorX,
+						                             resizeRect.yMin - localRect.yMin * factorY, 0.0f);
+						Vector3 newPosition = t.TransformPoint (offset);
+						if (newPosition != t.position) {
+							t.position = newPosition;
+						}
+						textMesh.scale = newScale;
+						textMesh.Commit ();
+						EditorUtility.SetDirty(textMesh);
+					}
+				}
+			}
+			// Rotate handles
+			if (!tk2dSceneHelper.RectControlsToggle ()) {
+				EditorGUI.BeginChangeCheck();
+				float theta = tk2dSceneHelper.RectRotateControl (645231, localRect, t, new List<int>());
+				if (EditorGUI.EndChangeCheck()) {
+					Undo.RegisterUndo (t, "Rotate");
+					if (Mathf.Abs(theta) > Mathf.Epsilon) {
+						t.Rotate(t.forward, theta, Space.World);
+					}
+				}
+			}
+			Handles.EndGUI ();
+			
+			// Sprite selecting
+			tk2dSceneHelper.HandleSelectSprites();
+			
+			// Move targeted sprites
+			tk2dSceneHelper.HandleMoveSprites(t, localRect);
+		}
+
+    	if (GUI.changed) {
+    		EditorUtility.SetDirty(target);
+    	}
 	}
 
 	void UndoableAction( System.Action<tk2dTextMesh> action ) {
@@ -113,6 +184,8 @@ class tk2dTextMeshEditor : Editor
 			action(tm);
 		}
 	}
+
+	static bool showInlineStylingHelp = false;
 
     public override void OnInspectorGUI()
     {
@@ -177,6 +250,7 @@ class tk2dTextMeshEditor : Editor
 			}
 
 			GUILayout.BeginHorizontal();
+			++EditorGUI.indentLevel;
 			if (textMesh.wordWrapWidth == 0)
 			{
 				EditorGUILayout.PrefixLabel("Word Wrap");
@@ -199,8 +273,37 @@ class tk2dTextMeshEditor : Editor
 					GUI.changed = true;
 				}
 			}
+			--EditorGUI.indentLevel;
 			GUILayout.EndHorizontal();
 			EditorGUILayout.EndToggleGroup();
+
+			GUILayout.BeginHorizontal ();
+			bool newInlineStyling = EditorGUILayout.Toggle("Inline Styling", textMesh.inlineStyling);
+			if (newInlineStyling != textMesh.inlineStyling) {
+				UndoableAction( tm => tm.inlineStyling = newInlineStyling );
+			}
+			if (textMesh.inlineStyling) {
+				showInlineStylingHelp = GUILayout.Toggle(showInlineStylingHelp, "?", EditorStyles.miniButton, GUILayout.ExpandWidth(false));
+			}
+			GUILayout.EndHorizontal ();
+			
+			if (textMesh.inlineStyling && showInlineStylingHelp)
+			{
+				Color bg = GUI.backgroundColor;
+				GUI.backgroundColor = new Color32(154, 176, 203, 255);
+				string message = "Inline style commands\n\n" +
+				                 "^cRGBA - set color\n" +
+				                 "^gRGBARGBA - set top and bottom colors\n" +
+				                 "      RGBA = single digit hex values (0 - f)\n\n" +
+				                 "^CRRGGBBAA - set color\n" +
+				                 "^GRRGGBBAARRGGBBAA - set top and bottom colors\n" +
+				                 "      RRGGBBAA = 2 digit hex values (00 - ff)\n\n" +
+				                 ((textMesh.font.textureGradients && textMesh.font.gradientCount > 0) ?
+				 				 "^0-9 - select gradient\n" : "") +
+				                 "^^ - print ^";
+				tk2dGuiUtility.InfoBox( message, tk2dGuiUtility.WarningLevel.Info );
+				GUI.backgroundColor = bg;						
+			}
 			
 			GUILayout.BeginHorizontal();
 			EditorGUILayout.PrefixLabel("Text");
@@ -210,6 +313,11 @@ class tk2dTextMeshEditor : Editor
 				GUI.changed = true;
 			}
 			GUILayout.EndHorizontal();
+
+			if (textMesh.NumTotalCharacters() > textMesh.maxChars) {
+				tk2dGuiUtility.InfoBox( "Number of printable characters in text mesh exceeds MaxChars on this text mesh. "+
+					 					"The text will be clipped at " + textMesh.maxChars.ToString() + " characters.", tk2dGuiUtility.WarningLevel.Error );
+			}
 			
 			TextAnchor newTextAnchor = (TextAnchor)EditorGUILayout.EnumPopup("Anchor", textMesh.anchor);
 			if (newTextAnchor != textMesh.anchor) UndoableAction( tm => tm.anchor = newTextAnchor );
@@ -217,11 +325,14 @@ class tk2dTextMeshEditor : Editor
 			bool newKerning = EditorGUILayout.Toggle("Kerning", textMesh.kerning);
 			if (newKerning != textMesh.kerning) UndoableAction( tm => tm.kerning = newKerning );
 
-			float newSpacing = EditorGUILayout.FloatField("Spacing", textMesh.spacing);
-			if (newSpacing != textMesh.spacing) UndoableAction( tm => tm.spacing = newSpacing );
+			float newSpacing = EditorGUILayout.FloatField("Spacing", textMesh.Spacing);
+			if (newSpacing != textMesh.Spacing) UndoableAction( tm => tm.Spacing = newSpacing );
 
-			float newLineSpacing = EditorGUILayout.FloatField("Line Spacing", textMesh.lineSpacing);
-			if (newLineSpacing != textMesh.lineSpacing) UndoableAction( tm => tm.lineSpacing = newLineSpacing );
+			float newLineSpacing = EditorGUILayout.FloatField("Line Spacing", textMesh.LineSpacing);
+			if (newLineSpacing != textMesh.LineSpacing) UndoableAction( tm => tm.LineSpacing = newLineSpacing );
+
+			int sortingOrder = EditorGUILayout.IntField("Sorting Order In Layer", textMesh.SortingOrder);
+			if (sortingOrder != textMesh.SortingOrder) { UndoableAction( tm => tm.SortingOrder = sortingOrder ); }
 
 			Vector3 newScale = EditorGUILayout.Vector3Field("Scale", textMesh.scale);
 			if (newScale != textMesh.scale) UndoableAction( tm => tm.scale = newScale );
@@ -267,21 +378,6 @@ class tk2dTextMeshEditor : Editor
 				
 				
 				GUILayout.EndHorizontal();
-				
-				bool newInlineStyling = EditorGUILayout.Toggle("Inline Styling", textMesh.inlineStyling);
-				if (newInlineStyling != textMesh.inlineStyling) {
-					UndoableAction( tm => tm.inlineStyling = newInlineStyling );
-				}
-
-				if (textMesh.inlineStyling)
-				{
-					Color bg = GUI.backgroundColor;
-					GUI.backgroundColor = new Color32(154, 176, 203, 255);
-					GUILayout.TextArea("Inline style commands\n" +
-					                   "^0-9 - select gradient\n" +
-									   "^^ - print ^");
-					GUI.backgroundColor = bg;						
-				}
 			}
 			
 			EditorGUILayout.BeginHorizontal();
@@ -322,11 +418,6 @@ class tk2dTextMeshEditor : Editor
 				if (tk2dPixelPerfectHelper.inst) tk2dPixelPerfectHelper.inst.Setup();
 				UndoableAction( tm => tm.MakePixelPerfect() );
 				GUI.changed = true;
-			}
-			
-			bool newPixelPerfect = GUILayout.Toggle(textMesh.pixelPerfect, "Always", GUILayout.Width(60.0f));
-			if (newPixelPerfect != textMesh.pixelPerfect) {
-				UndoableAction( tm => tm.pixelPerfect = newPixelPerfect );
 			}
 			
 			EditorGUILayout.EndHorizontal();

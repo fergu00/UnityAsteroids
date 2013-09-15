@@ -1,13 +1,12 @@
 using UnityEngine;
 using System.Collections;
 
-[AddComponentMenu("2D Toolkit/Sprite/tk2d9SliceSprite")]
+[AddComponentMenu("2D Toolkit/Sprite/tk2dSlicedSprite")]
 [RequireComponent(typeof(MeshRenderer))]
 [RequireComponent(typeof(MeshFilter))]
 [ExecuteInEditMode]
 /// <summary>
-/// Sprite implementation that implements 9-slice scaling. Doesn't support diced sprites.
-/// The interface takes care of sprite unit conversions for border[Top|Bottom|Left|Right]
+/// Sprite implementation that implements 9-slice scaling.
 /// </summary>
 public class tk2dSlicedSprite : tk2dBaseSprite
 {
@@ -23,13 +22,10 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 	Anchor _anchor = Anchor.LowerLeft;
 	[SerializeField]
 	bool _borderOnly = false;
-	
-	/// <summary>
-	/// Legacy mode (uses scale to adjust overall size).
-	/// Newly created sprites should have this set to false.
-	/// </summary>
-	public bool legacyMode = true;
 
+	[SerializeField]
+	bool legacyMode = false; // purely for fixup in 2D Toolkit 2.0
+	
 	/// <summary>
 	/// Gets or sets border only. When true, the quad in the middle of the
 	/// sliced sprite is omitted, thus only drawing a border and saving fillrate
@@ -101,6 +97,17 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 	/// Right border in sprite fraction (1 - Right, 0 - Left)
 	/// </summary>
 	public float borderRight = 0.2f;
+
+	public void SetBorder(float left, float bottom, float right, float top) {
+		if (borderLeft != left || borderBottom != bottom || borderRight != right || borderTop != top) {
+			borderLeft = left;
+			borderBottom = bottom;
+			borderRight = right;
+			borderTop = top;
+
+			UpdateVertices();
+		}
+	}
 	
 
 	[SerializeField]
@@ -157,15 +164,10 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 #endif
 		}
 	}
-	
+
 	new protected void SetColors(Color32[] dest)
 	{
-		Color c = _color;
-        if (collectionInst.premultipliedAlpha) { c.r *= c.a; c.g *= c.a; c.b *= c.a; }
-        Color c32 = c;
-
-		for (int i = 0; i < dest.Length; ++i)
-			dest[i] = c32;
+		tk2dSpriteGeomGen.SetSpriteColors (dest, 0, 16, _color, collectionInst.premultipliedAlpha);
 	}
 	
 	// Calculated center and extents
@@ -173,137 +175,13 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 	
 	protected void SetGeometry(Vector3[] vertices, Vector2[] uvs)
 	{
-		var sprite = collectionInst.spriteDefinitions[spriteId];
-		if (sprite.positions.Length == 4)
-		{
-			if (legacyMode)
-			{
-				// in legacy mode, scale is used to determine the total size of the sliced sprite
-				float sx = _scale.x;
-				float sy = _scale.y;
-				
-				Vector3[] srcVert = sprite.positions;
-				Vector3 dx = srcVert[1] - srcVert[0];
-				Vector3 dy = srcVert[2] - srcVert[0];
-				
-				Vector2[] srcUv = sprite.uvs;
-				Vector2 duvx = sprite.uvs[1] - sprite.uvs[0];
-				Vector2 duvy = sprite.uvs[2] - sprite.uvs[0];
-				
-				Vector3 origin = new Vector3(srcVert[0].x * sx, srcVert[0].y * sy, srcVert[0].z * _scale.z);
-				
-				Vector3[] originPoints = new Vector3[4] {
-					origin,
-					origin + dy * borderBottom,
-					origin + dy * (sy - borderTop),
-					origin + dy * sy
-				};
-				Vector2[] originUvs = new Vector2[4] {
-					srcUv[0],
-					srcUv[0] + duvy * borderBottom,
-					srcUv[0] + duvy * (1 - borderTop),
-					srcUv[0] + duvy,
-				};
-				
-				for (int i = 0; i < 4; ++i)
-				{
-					meshVertices[i * 4 + 0] = originPoints[i];
-					meshVertices[i * 4 + 1] = originPoints[i] + dx * borderLeft;
-					meshVertices[i * 4 + 2] = originPoints[i] + dx * (sx - borderRight);
-					meshVertices[i * 4 + 3] = originPoints[i] + dx * sx;
-					meshUvs[i * 4 + 0] = originUvs[i];
-					meshUvs[i * 4 + 1] = originUvs[i] + duvx * borderLeft;
-					meshUvs[i * 4 + 2] = originUvs[i] + duvx * (1 - borderRight);
-					meshUvs[i * 4 + 3] = originUvs[i] + duvx;
-				}
-			}
-			else
-			{
-				float sx = sprite.texelSize.x;
-				float sy = sprite.texelSize.y;
-				
-				Vector3[] srcVert = sprite.positions;
-				float dx = (srcVert[1].x - srcVert[0].x);
-				float dy = (srcVert[2].y - srcVert[0].y);
-				
-				float borderTopPixels = borderTop * dy;
-				float borderBottomPixels = borderBottom * dy;
-				float borderRightPixels = borderRight * dx;
-				float borderLeftPixels = borderLeft * dx;
-				
-				float dimXPixels = dimensions.x * sx;
-				float dimYPixels = dimensions.y * sy;
-				
-				float anchorOffsetX = 0.0f;
-				float anchorOffsetY = 0.0f;
-				switch (anchor)
-				{
-				case Anchor.LowerLeft: case Anchor.MiddleLeft: case Anchor.UpperLeft: 
-					break;
-				case Anchor.LowerCenter: case Anchor.MiddleCenter: case Anchor.UpperCenter: 
-					anchorOffsetX = -(int)(dimensions.x / 2.0f); break;
-				case Anchor.LowerRight: case Anchor.MiddleRight: case Anchor.UpperRight: 
-					anchorOffsetX = -(int)(dimensions.x); break;
-				}
-				switch (anchor)
-				{
-				case Anchor.LowerLeft: case Anchor.LowerCenter: case Anchor.LowerRight:
-					break;
-				case Anchor.MiddleLeft: case Anchor.MiddleCenter: case Anchor.MiddleRight:
-					anchorOffsetY = -(int)(dimensions.y / 2.0f); break;
-				case Anchor.UpperLeft: case Anchor.UpperCenter: case Anchor.UpperRight:
-					anchorOffsetY = -(int)dimensions.y; break;
-				}
-				
-				// scale back to sprite coordinates
-				// do it after the cast above, as we're trying to align to pixel
-				anchorOffsetX *= sx;
-				anchorOffsetY *= sy;
-				
-				float colliderOffsetZ = ( boxCollider != null ) ? ( boxCollider.center.z ) : 0.0f;
-				float colliderExtentZ = ( boxCollider != null ) ? ( boxCollider.size.z * 0.5f ) : 0.5f;
-				boundsCenter.Set(_scale.x * (dimXPixels * 0.5f + anchorOffsetX), _scale.y * (dimYPixels * 0.5f + anchorOffsetY), colliderOffsetZ);
-				boundsExtents.Set(_scale.x * (dimXPixels * 0.5f), _scale.y * (dimYPixels * 0.5f), colliderExtentZ);
-				
-				Vector2[] srcUv = sprite.uvs;
-				Vector2 duvx = sprite.uvs[1] - sprite.uvs[0];
-				Vector2 duvy = sprite.uvs[2] - sprite.uvs[0];
-				
-				Vector3 origin = new Vector3(srcVert[0].x, srcVert[0].y, srcVert[0].z);
-				origin = new Vector3(anchorOffsetX, anchorOffsetY, 0);
-				
-				Vector3[] originPoints = new Vector3[4] {
-					origin,
-					origin + new Vector3(0, borderBottomPixels, 0),
-					origin + new Vector3(0, dimYPixels - borderTopPixels, 0),
-					origin + new Vector3(0, dimYPixels, 0),
-				};
-				Vector2[] originUvs = new Vector2[4] {
-					srcUv[0],
-					srcUv[0] + duvy * borderBottom,
-					srcUv[0] + duvy * (1 - borderTop),
-					srcUv[0] + duvy,
-				};
-				
-				for (int i = 0; i < 4; ++i)
-				{
-					meshVertices[i * 4 + 0] = originPoints[i];
-					meshVertices[i * 4 + 1] = originPoints[i] + new Vector3(borderLeftPixels, 0, 0);
-					meshVertices[i * 4 + 2] = originPoints[i] + new Vector3(dimXPixels - borderRightPixels, 0, 0);
-					meshVertices[i * 4 + 3] = originPoints[i] + new Vector3(dimXPixels, 0, 0);
-					
-					for (int j = 0; j < 4; ++j) {
-						meshVertices[i * 4 + j] = Vector3.Scale(meshVertices[i * 4 + j], _scale);
-					}
-					
-					meshUvs[i * 4 + 0] = originUvs[i];
-					meshUvs[i * 4 + 1] = originUvs[i] + duvx * borderLeft;
-					meshUvs[i * 4 + 2] = originUvs[i] + duvx * (1 - borderRight);
-					meshUvs[i * 4 + 3] = originUvs[i] + duvx;
-				}
-			}
-		}
-		else
+		var sprite = CurrentSprite;
+
+		float colliderOffsetZ = ( boxCollider != null ) ? ( boxCollider.center.z ) : 0.0f;
+		float colliderExtentZ = ( boxCollider != null ) ? ( boxCollider.size.z * 0.5f ) : 0.5f;
+		tk2dSpriteGeomGen.SetSlicedSpriteGeom(meshVertices, meshUvs, 0, out boundsCenter, out boundsExtents, sprite, _scale, dimensions, new Vector2(borderLeft, borderBottom), new Vector2(borderRight, borderTop), anchor, colliderOffsetZ, colliderExtentZ);
+
+		if (sprite.positions.Length != 4)
 		{
 			for (int i = 0; i < vertices.Length; ++i)
 				vertices[i] = Vector3.zero;
@@ -312,26 +190,56 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 	
 	void SetIndices()
 	{
-		meshIndices = new int[9 * 6] {
-			0, 4, 1, 1, 4, 5,
-			1, 5, 2, 2, 5, 6,
-			2, 6, 3, 3, 6, 7,
-			4, 8, 5, 5, 8, 9,
-			5, 9, 6, 6, 9, 10, // middle bit
-			6, 10, 7, 7, 10, 11,
-			8, 12, 9, 9, 12, 13,
-			9, 13, 10, 10, 13, 14,
-			10, 14, 11, 11, 14, 15
-		};		
-		if (_borderOnly) {
-			for (int i = 24; i < 30; ++i) {
-				meshIndices[i] = 0;
-			}			
+		int n = _borderOnly ? (8 * 6) : (9 * 6);
+		meshIndices = new int[n];
+		tk2dSpriteGeomGen.SetSlicedSpriteIndices(meshIndices, 0, 0, CurrentSprite, _borderOnly);
+	}
+
+	// returns true if value is close enough to compValue, by within 1% of scale
+	bool NearEnough(float value, float compValue, float scale) {
+		float diff = Mathf.Abs(value - compValue);
+		return Mathf.Abs(diff / scale) < 0.01f;
+	}
+
+	void PermanentUpgradeLegacyMode() {
+		tk2dSpriteDefinition def = CurrentSprite;
+
+		// Guess anchor
+		float x = def.untrimmedBoundsData[0].x;
+		float y = def.untrimmedBoundsData[0].y;
+		float w = def.untrimmedBoundsData[1].x;
+		float h = def.untrimmedBoundsData[1].y;
+		if 		(NearEnough(x,    0, w) && NearEnough(y, -h/2, h))	_anchor = tk2dBaseSprite.Anchor.UpperCenter;
+		else if (NearEnough(x,    0, w) && NearEnough(y,    0, h)) 	_anchor = tk2dBaseSprite.Anchor.MiddleCenter;
+		else if (NearEnough(x,    0, w) && NearEnough(y,  h/2, h)) 	_anchor = tk2dBaseSprite.Anchor.LowerCenter;
+		else if (NearEnough(x, -w/2, w) && NearEnough(y, -h/2, h)) 	_anchor = tk2dBaseSprite.Anchor.UpperRight;
+		else if (NearEnough(x, -w/2, w) && NearEnough(y,    0, h)) 	_anchor = tk2dBaseSprite.Anchor.MiddleRight;
+		else if (NearEnough(x, -w/2, w) && NearEnough(y,  h/2, h)) 	_anchor = tk2dBaseSprite.Anchor.LowerRight;
+		else if (NearEnough(x,  w/2, w) && NearEnough(y, -h/2, h)) 	_anchor = tk2dBaseSprite.Anchor.UpperLeft;
+		else if (NearEnough(x,  w/2, w) && NearEnough(y,    0, h)) 	_anchor = tk2dBaseSprite.Anchor.MiddleLeft;
+		else if (NearEnough(x,  w/2, w) && NearEnough(y,  h/2, h)) 	_anchor = tk2dBaseSprite.Anchor.LowerLeft;
+		else {
+			Debug.LogError("tk2dSlicedSprite (" + name + ") error - Unable to determine anchor upgrading from legacy mode. Please fix this manually.");
+			_anchor = tk2dBaseSprite.Anchor.MiddleCenter;
 		}
+
+		// Calculate dimensions in pixel units
+		float pixelWidth = w / def.texelSize.x;
+		float pixelHeight = h / def.texelSize.y;
+		_dimensions.x = _scale.x * pixelWidth;
+		_dimensions.y = _scale.y * pixelHeight;
+
+		_scale.Set( 1, 1, 1 );
+		legacyMode = false;
 	}
 	
 	public override void Build()
 	{
+		// Best guess upgrade
+		if (legacyMode == true) {
+			PermanentUpgradeLegacyMode();
+		}
+
 		meshUvs = new Vector2[16];
 		meshVertices = new Vector3[16];
 		meshColors = new Color32[16];
@@ -354,6 +262,7 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 		mesh.uv = meshUvs;
 		mesh.triangles = meshIndices;
 		mesh.RecalculateBounds();
+		mesh.bounds = AdjustedMeshBounds( mesh.bounds, renderLayer );
 		
 		GetComponent<MeshFilter>().mesh = mesh;
 		
@@ -402,6 +311,7 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 			mesh.vertices = meshVertices;
 			mesh.uv = meshUvs;
 			mesh.RecalculateBounds();
+			mesh.bounds = AdjustedMeshBounds( mesh.bounds, renderLayer );
 			
 			UpdateCollider();
 		}
@@ -417,7 +327,7 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 					boxCollider = gameObject.AddComponent<BoxCollider>();
 				}
 			}
-			boxCollider.extents = boundsExtents;
+			boxCollider.size = 2 * boundsExtents;
 			boxCollider.center = boundsCenter;
 		} else {
 #if UNITY_EDITOR
@@ -432,6 +342,19 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 #endif
 		}
 	}
+
+#if UNITY_EDITOR
+	void OnDrawGizmos() {
+		if (mesh != null) {
+			Bounds b = mesh.bounds;
+			Gizmos.color = Color.clear;
+			Gizmos.matrix = transform.localToWorldMatrix;
+			Gizmos.DrawCube(b.center, b.extents * 2);
+			Gizmos.matrix = Matrix4x4.identity;
+			Gizmos.color = Color.white;
+		}
+	}
+#endif
 
 	protected override void CreateCollider() {
 		UpdateCollider();
@@ -457,5 +380,32 @@ public class tk2dSlicedSprite : tk2dBaseSprite
 			return 0;
 #endif
 		return 16;
+	}
+
+	public override void ReshapeBounds(Vector3 dMin, Vector3 dMax) {
+		var sprite = CurrentSprite;
+		Vector3 oldSize = new Vector3(_dimensions.x * sprite.texelSize.x * _scale.x, _dimensions.y * sprite.texelSize.y * _scale.y);
+		Vector3 oldMin = Vector3.zero;
+		switch (_anchor) {
+			case Anchor.LowerLeft: oldMin.Set(0,0,0); break;
+			case Anchor.LowerCenter: oldMin.Set(0.5f,0,0); break;
+			case Anchor.LowerRight: oldMin.Set(1,0,0); break;
+			case Anchor.MiddleLeft: oldMin.Set(0,0.5f,0); break;
+			case Anchor.MiddleCenter: oldMin.Set(0.5f,0.5f,0); break;
+			case Anchor.MiddleRight: oldMin.Set(1,0.5f,0); break;
+			case Anchor.UpperLeft: oldMin.Set(0,1,0); break;
+			case Anchor.UpperCenter: oldMin.Set(0.5f,1,0); break;
+			case Anchor.UpperRight: oldMin.Set(1,1,0); break;
+		}
+		oldMin = Vector3.Scale(oldMin, oldSize) * -1;
+		Vector3 newDimensions = oldSize + dMax - dMin;
+		newDimensions.x /= sprite.texelSize.x * _scale.x;
+		newDimensions.y /= sprite.texelSize.y * _scale.y;
+		Vector3 scaledMin = new Vector3(Mathf.Approximately(_dimensions.x, 0) ? 0 : (oldMin.x * newDimensions.x / _dimensions.x),
+			Mathf.Approximately(_dimensions.y, 0) ? 0 : (oldMin.y * newDimensions.y / _dimensions.y));
+		Vector3 offset = oldMin + dMin - scaledMin;
+		offset.z = 0;
+		transform.position = transform.TransformPoint(offset);
+		dimensions = new Vector2(newDimensions.x, newDimensions.y);
 	}
 }

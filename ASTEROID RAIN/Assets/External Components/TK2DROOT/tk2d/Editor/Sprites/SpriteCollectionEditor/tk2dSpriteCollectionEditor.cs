@@ -8,6 +8,11 @@ public class tk2dSpriteCollectionEditor : Editor
 {
 	const string defaultSpriteCollectionName = "SpriteCollection";
 	static bool showDefaultInspector = false;
+	static bool viewData = false;
+
+    void OnEnable() {
+    	viewData = false;
+    }
 
     public override void OnInspectorGUI()
     {
@@ -64,6 +69,11 @@ public class tk2dSpriteCollectionEditor : Editor
         EditorGUILayout.EndVertical();
 
 		GUILayout.Space(64);
+
+    	if (viewData && !(gen.managedSpriteCollection && showDefaultInspector)) {
+    		DrawDefaultInspector();
+    		return;
+    	}
     }
 
     public static tk2dSpriteCollection CreateSpriteCollection(string basePath, string name)
@@ -87,6 +97,11 @@ public class tk2dSpriteCollectionEditor : Editor
         return AssetDatabase.LoadAssetAtPath(path, typeof(tk2dSpriteCollection)) as tk2dSpriteCollection;
 	}
 
+    [MenuItem("CONTEXT/tk2dSpriteCollection/View data")]
+    static void ToggleViewData() {
+        tk2dSpriteCollectionEditor.viewData = true;
+    }
+
 	// Menu entries
 	[MenuItem("Assets/Create/tk2d/Sprite Collection", false, 10000)]
     static void DoCollectionCreate()
@@ -97,6 +112,9 @@ public class tk2dSpriteCollectionEditor : Editor
             GameObject go = new GameObject();
             tk2dSpriteCollection spriteCollection = go.AddComponent<tk2dSpriteCollection>();
             spriteCollection.version = tk2dSpriteCollection.CURRENT_VERSION;
+            if (tk2dCamera.Editor__Inst != null) {
+            	spriteCollection.sizeDef.CopyFrom( tk2dSpriteCollectionSize.ForTk2dCamera( tk2dCamera.Editor__Inst ) );
+            }
 	        tk2dEditorUtility.SetGameObjectActive(go, false);
 
 #if (UNITY_3_0 || UNITY_3_1 || UNITY_3_2 || UNITY_3_3 || UNITY_3_4)

@@ -9,6 +9,7 @@ public static class tk2dGuiUtility
 	
 	static int activePositionHandleId = 0;
 	static Vector2 activePositionHandlePosition = Vector2.zero;
+	static Vector2 positionHandleOffset = Vector2.zero;
 	
 	public static void SetPositionHandleValue(int id, Vector2 val)
 	{
@@ -16,17 +17,16 @@ public static class tk2dGuiUtility
 			activePositionHandlePosition = val;
 	}
 	
-	public static Vector2 PositionHandle(int id, Vector2 position, float size, Color inactiveColor, Color activeColor)
+	public static Vector2 PositionHandle(int id, Vector2 position)
 	{
-		KeyCode discardKeyCode = KeyCode.None;
-		return PositionHandle(id, position, size, inactiveColor, activeColor, out discardKeyCode);
+		return Handle(tk2dEditorSkin.MoveHandle, id, position, false);
 	}
 	
-	public static Vector2 PositionHandle(int id, Vector2 position, float size, Color inactiveColor, Color activeColor, out KeyCode keyCode)
+	public static Vector2 Handle(GUIStyle style, int id, Vector2 position, bool allowKeyboardFocus)
 	{
-		Rect rect = new Rect(position.x - size, position.y - size, size * 2, size * 2);
-		int controlID = GUIUtility.GetControlID(id, FocusType.Passive);
-		keyCode = KeyCode.None;
+		int handleSize = (int)style.fixedWidth;
+		Rect rect = new Rect(position.x - handleSize / 2, position.y - handleSize / 2, handleSize, handleSize);
+		int controlID = id;
 		
 		switch (Event.current.GetTypeForControl(controlID))
 		{
@@ -35,6 +35,10 @@ public static class tk2dGuiUtility
 				if (rect.Contains(Event.current.mousePosition))
 				{
 					activePositionHandleId = id;
+					if (allowKeyboardFocus) {
+						GUIUtility.keyboardControl = controlID;
+					}
+					positionHandleOffset = Event.current.mousePosition - position;
 					GUIUtility.hotControl = controlID;
 					Event.current.Use();
 				}
@@ -45,7 +49,7 @@ public static class tk2dGuiUtility
 			{
 				if (GUIUtility.hotControl == controlID)				
 				{
-					position = Event.current.mousePosition;
+					position = Event.current.mousePosition - positionHandleOffset;
 					Event.current.Use();					
 				}
 				break;
@@ -56,42 +60,18 @@ public static class tk2dGuiUtility
 				if (GUIUtility.hotControl == controlID)
 				{
 					activePositionHandleId = 0;
+					position = Event.current.mousePosition - positionHandleOffset;
 					GUIUtility.hotControl = 0;
 					Event.current.Use();
 				}
 				break;
 			}
 			
-			case EventType.KeyDown:
-			{
-				if (rect.Contains(Event.current.mousePosition))
-				{
-					keyCode = Event.current.keyCode;
-					if (GUIUtility.hotControl == controlID)
-					{
-						activePositionHandleId = 0;
-						GUIUtility.hotControl = 0;
-						Event.current.Use();
-					}
-				}
-				break;
-			}
-			
 			case EventType.Repaint:
 			{
-				Color oc = Handles.color;
-				Handles.color = (GUIUtility.hotControl == controlID)?activeColor:inactiveColor;
-			
-				Vector3[] pts = new Vector3[] {
-					new Vector3(rect.xMin, rect.yMin, 0.0f),
-					new Vector3(rect.xMax, rect.yMin, 0.0f),
-					new Vector3(rect.xMax, rect.yMax, 0.0f),
-					new Vector3(rect.xMin, rect.yMax, 0.0f),
-				};
-				Handles.DrawSolidRectangleWithOutline(pts, oc, oc);			
-			
-				Handles.color = oc;
-			
+				bool selected = (GUIUtility.keyboardControl == controlID ||
+								 GUIUtility.hotControl == controlID);
+				style.Draw(rect, selected, false, false, false);
 				break;
 			}
 		}
@@ -129,6 +109,8 @@ public static class tk2dGuiUtility
 	/// </summary>
 	public static int InfoBoxWithButtons(string message, WarningLevel warningLevel, params string[] buttons)
 	{
+		InfoBox(message, warningLevel);
+
 		Color oldBackgroundColor = GUI.backgroundColor;
 		switch (warningLevel)
 		{
@@ -137,14 +119,6 @@ public static class tk2dGuiUtility
 		case WarningLevel.Error: GUI.backgroundColor = new Color32(255, 0, 0, 255); break;
 		}
 
-		GUILayout.BeginVertical("textarea");
-		GUI.backgroundColor = oldBackgroundColor;
-		
-		GUIStyle labelStyle = new GUIStyle("label");
-		labelStyle.wordWrap = true;
-		
-		GUILayout.Label(message, labelStyle, GUILayout.ExpandWidth(true));
-		
 		int buttonPressed = -1;
 		if (buttons != null)
 		{
@@ -157,9 +131,7 @@ public static class tk2dGuiUtility
 			}
 			GUILayout.EndHorizontal();
 		}
-		
-		GUILayout.EndVertical();
-		
+		GUI.backgroundColor = oldBackgroundColor;
 		return buttonPressed;
 	}
 
@@ -231,6 +203,29 @@ public static class tk2dGuiUtility
 		return hasChanged;
 	}
 
+	public static void SpriteCollectionSize( tk2dSpriteCollectionSize scs ) {
+		GUILayout.BeginHorizontal();
+		scs.type = (tk2dSpriteCollectionSize.Type)EditorGUILayout.EnumPopup("Size", scs.type);
+		tk2dCamera cam = tk2dCamera.Editor__Inst;
+		GUI.enabled = cam != null;
+		if (GUILayout.Button(new GUIContent("g", "Grab from tk2dCamera"), EditorStyles.miniButton, GUILayout.ExpandWidth(false))) {
+			scs.CopyFrom( tk2dSpriteCollectionSize.ForTk2dCamera(cam) );
+			GUI.changed = true;
+		}
+		GUI.enabled = true;
+		GUILayout.EndHorizontal();
+		EditorGUI.indentLevel++;
+		switch (scs.type) {
+			case tk2dSpriteCollectionSize.Type.Explicit:
+				scs.orthoSize = EditorGUILayout.FloatField("Ortho Size", scs.orthoSize);
+				scs.height = EditorGUILayout.FloatField("Target Height", scs.height);
+				break;
+			case tk2dSpriteCollectionSize.Type.PixelsPerMeter:
+				scs.pixelsPerMeter = EditorGUILayout.FloatField("Pixels Per Meter", scs.pixelsPerMeter);
+				break;
+		}
+		EditorGUI.indentLevel--;
+	}
 
 	public static string PlatformPopup(tk2dSystem system, string label, string platform)
 	{

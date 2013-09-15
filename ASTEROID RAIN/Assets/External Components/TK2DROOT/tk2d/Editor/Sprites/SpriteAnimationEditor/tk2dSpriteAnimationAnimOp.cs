@@ -156,7 +156,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 
 			if (textToggle)
 			{
-				textNames = GUILayout.TextArea(textNames, GUILayout.ExpandWidth(true));
+				textNames = EditorGUILayout.TextArea(textNames, GUILayout.ExpandWidth(true));
 				GUILayout.BeginHorizontal();
 				GUILayout.FlexibleSpace();
 				if (GUILayout.Button("Process"))

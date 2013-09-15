@@ -29,6 +29,7 @@ namespace tk2dEditor.Font
 		public int lineHeight = 0;
 		public int numPages = 0;
 		public bool isPacked = false;
+		public float textureScale = 1;
 		
 		public List<Char> chars = new List<Char>();
 		public List<Kerning> kernings = new List<Kerning>();
@@ -97,6 +98,7 @@ namespace tk2dEditor.Font
 				
 				thisChar.texOverride = false;
 				
+				if (thisChar.id == -1) thisChar.id = 0;
 				fontInfo.chars.Add(thisChar);
 			}
 			
@@ -181,6 +183,7 @@ namespace tk2dEditor.Font
 						int chnl = int.Parse(FindKeyValue(tokens, "chnl"));
 						thisChar.channel = (int)Mathf.Round(Mathf.Log(chnl) / Mathf.Log(2));
 					}
+					if (thisChar.id == -1) thisChar.id = 0;
 					fontInfo.chars.Add(thisChar);
 				}
 				else if (tokens[0] == "kerning")
@@ -227,6 +230,7 @@ namespace tk2dEditor.Font
 			float texWidth = fontInfo.scaleW;
 	        float texHeight = fontInfo.scaleH;
 	        float lineHeight = fontInfo.lineHeight;
+	        float texScale = fontInfo.textureScale;
 	
 	        target.version = tk2dFontData.CURRENT_VERSION; 
 	        target.lineHeight = lineHeight * scale;
@@ -282,16 +286,16 @@ namespace tk2dEditor.Font
 				// precompute required data
 				if (theChar.texOverride)
 				{
-					int w = theChar.texW;
-					int h = theChar.texH;
+					float w = theChar.texW / texScale;
+					float h = theChar.texH / texScale;
 					if (theChar.texFlipped)
 					{
-						h = theChar.texW;
-						w = theChar.texH;
+						h = theChar.texW / texScale;
+						w = theChar.texH / texScale;
 					}
 					
-		            float px = (xoffset + theChar.texOffsetX) * scale;
-					float py = (lineHeight - yoffset - theChar.texOffsetY) * scale;
+		            float px = (xoffset + theChar.texOffsetX * texScale) * scale;
+					float py = (lineHeight - yoffset - theChar.texOffsetY * texScale) * scale;
 					
 		            thisChar.p0 = new Vector3(px, py , 0);
 		            thisChar.p1 = new Vector3(px + w * scale, py - h * scale, 0);

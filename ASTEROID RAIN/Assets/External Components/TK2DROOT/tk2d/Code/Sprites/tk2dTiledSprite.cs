@@ -6,8 +6,7 @@ using System.Collections;
 [RequireComponent(typeof(MeshFilter))]
 [ExecuteInEditMode]
 /// <summary>
-/// Sprite implementation that implements 9-slice scaling. Doesn't support diced sprites.
-/// The interface takes care of sprite unit conversions for border[Top|Bottom|Left|Right]
+/// Sprite implementation that tiles a sprite to fill given dimensions.
 /// </summary>
 public class tk2dTiledSprite : tk2dBaseSprite
 {
@@ -120,24 +119,23 @@ public class tk2dTiledSprite : tk2dBaseSprite
 	
 	new protected void SetColors(Color32[] dest)
 	{
-		Color c = _color;
-        if (collectionInst.premultipliedAlpha) { c.r *= c.a; c.g *= c.a; c.b *= c.a; }
-        Color32 c32 = c;
-		for (int i = 0; i < dest.Length; ++i)
-			dest[i] = c32;
+		int numVertices;
+		int numIndices;
+		tk2dSpriteGeomGen.GetTiledSpriteGeomDesc(out numVertices, out numIndices, CurrentSprite, dimensions);
+		tk2dSpriteGeomGen.SetSpriteColors (dest, 0, numVertices, _color, collectionInst.premultipliedAlpha);
 	}
 	
 	// Calculated center and extents
 	Vector3 boundsCenter = Vector3.zero, boundsExtents = Vector3.zero;
+
+
 	
 	public override void Build()
 	{
-		var sprite = collectionInst.spriteDefinitions[spriteId];
-		int numTilesX = (int)Mathf.Ceil( (_dimensions.x * sprite.texelSize.x) / sprite.untrimmedBoundsData[1].x );
-		int numTilesY = (int)Mathf.Ceil( (_dimensions.y * sprite.texelSize.y) / sprite.untrimmedBoundsData[1].y );
-		int numVertices = numTilesX * numTilesY * 4;
-		int numIndices = numTilesX * numTilesY * 6;
-		Vector2 totalMeshSize = new Vector2( _dimensions.x * sprite.texelSize.x * _scale.x, _dimensions.y * sprite.texelSize.y * _scale.y );
+		var spriteDef = CurrentSprite;
+		int numVertices;
+		int numIndices;
+		tk2dSpriteGeomGen.GetTiledSpriteGeomDesc(out numVertices, out numIndices, spriteDef, dimensions);
 
 		if (meshUvs == null || meshUvs.Length != numVertices) {
 			meshUvs = new Vector2[numVertices];
@@ -148,134 +146,10 @@ public class tk2dTiledSprite : tk2dBaseSprite
 			meshIndices = new int[numIndices];
 		}
 
-		int baseIndex = 0;
-		for (int i = 0; i < numIndices; i += 6) {
-			meshIndices[i + 0] = sprite.indices[0] + baseIndex;
-			meshIndices[i + 1] = sprite.indices[1] + baseIndex;
-			meshIndices[i + 2] = sprite.indices[2] + baseIndex;
-			meshIndices[i + 3] = sprite.indices[3] + baseIndex;
-			meshIndices[i + 4] = sprite.indices[4] + baseIndex;
-			meshIndices[i + 5] = sprite.indices[5] + baseIndex;
-			baseIndex += 4;
-		}
-
-		// Anchor tweaks
-		Vector3 anchorOffset = Vector3.zero;
-		switch (anchor)
-		{
-		case Anchor.LowerLeft: case Anchor.MiddleLeft: case Anchor.UpperLeft: 
-			break;
-		case Anchor.LowerCenter: case Anchor.MiddleCenter: case Anchor.UpperCenter: 
-			anchorOffset.x = -(totalMeshSize.x / 2.0f); break;
-		case Anchor.LowerRight: case Anchor.MiddleRight: case Anchor.UpperRight: 
-			anchorOffset.x = -(totalMeshSize.x); break;
-		}
-		switch (anchor)
-		{
-		case Anchor.LowerLeft: case Anchor.LowerCenter: case Anchor.LowerRight:
-			break;
-		case Anchor.MiddleLeft: case Anchor.MiddleCenter: case Anchor.MiddleRight:
-			anchorOffset.y = -(totalMeshSize.y / 2.0f); break;
-		case Anchor.UpperLeft: case Anchor.UpperCenter: case Anchor.UpperRight:
-			anchorOffset.y = -totalMeshSize.y; break;
-		}
-		Vector3 colliderAnchor = anchorOffset;
-		anchorOffset -= Vector3.Scale( sprite.positions[0], _scale );
-
 		float colliderOffsetZ = ( boxCollider != null ) ? ( boxCollider.center.z ) : 0.0f;
 		float colliderExtentZ = ( boxCollider != null ) ? ( boxCollider.size.z * 0.5f ) : 0.5f;
-		boundsCenter.Set(totalMeshSize.x * 0.5f + colliderAnchor.x, totalMeshSize.y * 0.5f + colliderAnchor.y, colliderOffsetZ );
-		boundsExtents.Set(totalMeshSize.x * 0.5f, totalMeshSize.y * 0.5f, colliderExtentZ);
-
-		int vert = 0;
-		Vector3 bounds = Vector3.Scale(  sprite.untrimmedBoundsData[1], _scale );
-		Vector3 baseOffset = Vector3.zero;
-		Vector3 offset = baseOffset;
-		for (int y = 0; y < numTilesY; ++y) {
-			offset.x = baseOffset.x;
-			for (int x = 0; x < numTilesX; ++x) {
-				float xClipFrac = 1;
-				float yClipFrac = 1;
-				if (Mathf.Abs(offset.x + bounds.x) > Mathf.Abs(totalMeshSize.x) ) {
-					xClipFrac = ((totalMeshSize.x % bounds.x) / bounds.x);
-				}
-				if (Mathf.Abs(offset.y + bounds.y) > Mathf.Abs(totalMeshSize.y)) {
-					yClipFrac = ((totalMeshSize.y % bounds.y) / bounds.y);
-				}
-
-				Vector3 geomOffset = offset + anchorOffset;
-
-				if (xClipFrac != 1 || yClipFrac != 1) {
-					Vector2 fracBottomLeft = Vector2.zero;
-					Vector2 fracTopRight = new Vector2(xClipFrac, yClipFrac);
-
-					Vector3 bottomLeft = new Vector3(Mathf.Lerp(sprite.positions[0].x, sprite.positions[3].x, fracBottomLeft.x) * _scale.x,
-												  	 Mathf.Lerp(sprite.positions[0].y, sprite.positions[3].y, fracBottomLeft.y) * _scale.y,
-												 	 sprite.positions[0].z * _scale.z);
-					Vector3 topRight = new Vector3(Mathf.Lerp(sprite.positions[0].x, sprite.positions[3].x, fracTopRight.x) * _scale.x,
-												   Mathf.Lerp(sprite.positions[0].y, sprite.positions[3].y, fracTopRight.y) * _scale.y,
-												   sprite.positions[0].z * _scale.z);
-
-					meshVertices[vert + 0] = geomOffset + new Vector3(bottomLeft.x, bottomLeft.y, bottomLeft.z);
-					meshVertices[vert + 1] = geomOffset + new Vector3(topRight.x, bottomLeft.y, bottomLeft.z);
-					meshVertices[vert + 2] = geomOffset + new Vector3(bottomLeft.x, topRight.y, bottomLeft.z);
-					meshVertices[vert + 3] = geomOffset + new Vector3(topRight.x, topRight.y, bottomLeft.z);
-
-					// find the fraction of UV
-					// This can be done without a branch, but will end up with loads of unnecessary interpolations
-					if (sprite.flipped == tk2dSpriteDefinition.FlipMode.Tk2d)
-					{
-						Vector2 v0 = new Vector2(Mathf.Lerp(sprite.uvs[0].x, sprite.uvs[3].x, fracBottomLeft.y),
-		  									     Mathf.Lerp(sprite.uvs[0].y, sprite.uvs[3].y, fracBottomLeft.x));
-						Vector2 v1 = new Vector2(Mathf.Lerp(sprite.uvs[0].x, sprite.uvs[3].x, fracTopRight.y),
-												 Mathf.Lerp(sprite.uvs[0].y, sprite.uvs[3].y, fracTopRight.x));
-						
-						meshUvs[vert + 0] = new Vector2(v0.x, v0.y);
-						meshUvs[vert + 1] = new Vector2(v0.x, v1.y);
-						meshUvs[vert + 2] = new Vector2(v1.x, v0.y);
-						meshUvs[vert + 3] = new Vector2(v1.x, v1.y);
-					}
-					else if (sprite.flipped == tk2dSpriteDefinition.FlipMode.TPackerCW)
-					{
-						Vector2 v0 = new Vector2(Mathf.Lerp(sprite.uvs[0].x, sprite.uvs[3].x, fracBottomLeft.y),
-												 Mathf.Lerp(sprite.uvs[0].y, sprite.uvs[3].y, fracBottomLeft.x));
-						Vector2 v1 = new Vector2(Mathf.Lerp(sprite.uvs[0].x, sprite.uvs[3].x, fracTopRight.y),
-												 Mathf.Lerp(sprite.uvs[0].y, sprite.uvs[3].y, fracTopRight.x));
-			
-						meshUvs[vert + 0] = new Vector2(v0.x, v0.y);
-						meshUvs[vert + 2] = new Vector2(v1.x, v0.y);
-						meshUvs[vert + 1] = new Vector2(v0.x, v1.y);
-						meshUvs[vert + 3] = new Vector2(v1.x, v1.y);
-					}
-					else
-					{
-						Vector2 v0 = new Vector2(Mathf.Lerp(sprite.uvs[0].x, sprite.uvs[3].x, fracBottomLeft.x),
-												 Mathf.Lerp(sprite.uvs[0].y, sprite.uvs[3].y, fracBottomLeft.y));
-						Vector2 v1 = new Vector2(Mathf.Lerp(sprite.uvs[0].x, sprite.uvs[3].x, fracTopRight.x),
-												 Mathf.Lerp(sprite.uvs[0].y, sprite.uvs[3].y, fracTopRight.y));
-			
-						meshUvs[vert + 0] = new Vector2(v0.x, v0.y);
-						meshUvs[vert + 1] = new Vector2(v1.x, v0.y);
-						meshUvs[vert + 2] = new Vector2(v0.x, v1.y);
-						meshUvs[vert + 3] = new Vector2(v1.x, v1.y);
-					}
-				}
-				else {
-					meshVertices[vert + 0] = geomOffset + Vector3.Scale( sprite.positions[0], _scale );
-					meshVertices[vert + 1] = geomOffset + Vector3.Scale( sprite.positions[1], _scale );
-					meshVertices[vert + 2] = geomOffset + Vector3.Scale( sprite.positions[2], _scale );
-					meshVertices[vert + 3] = geomOffset + Vector3.Scale( sprite.positions[3], _scale );
-					meshUvs[vert + 0] = sprite.uvs[0];
-					meshUvs[vert + 1] = sprite.uvs[1];
-					meshUvs[vert + 2] = sprite.uvs[2];
-					meshUvs[vert + 3] = sprite.uvs[3];
-				}
-
-				vert += 4;
-				offset.x += bounds.x;
-			}
-			offset.y += bounds.y;
-		}
+		tk2dSpriteGeomGen.SetTiledSpriteGeom(meshVertices, meshUvs, 0, out boundsCenter, out boundsExtents, spriteDef, _scale, dimensions, anchor, colliderOffsetZ, colliderExtentZ);
+		tk2dSpriteGeomGen.SetTiledSpriteIndices(meshIndices, 0, 0, spriteDef, dimensions);
 		
 		SetColors(meshColors);
 		
@@ -293,6 +167,7 @@ public class tk2dTiledSprite : tk2dBaseSprite
 		mesh.uv = meshUvs;
 		mesh.triangles = meshIndices;
 		mesh.RecalculateBounds();
+		mesh.bounds = AdjustedMeshBounds( mesh.bounds, renderLayer );
 		
 		GetComponent<MeshFilter>().mesh = mesh;
 		
@@ -341,7 +216,7 @@ public class tk2dTiledSprite : tk2dBaseSprite
 					boxCollider = gameObject.AddComponent<BoxCollider>();
 				}
 			}
-			boxCollider.extents = boundsExtents;
+			boxCollider.size = 2 * boundsExtents;
 			boxCollider.center = boundsCenter;
 		} else {
 #if UNITY_EDITOR
@@ -356,6 +231,19 @@ public class tk2dTiledSprite : tk2dBaseSprite
 #endif
 		}
 	}
+
+#if UNITY_EDITOR
+	void OnDrawGizmos() {
+		if (mesh != null) {
+			Bounds b = mesh.bounds;
+			Gizmos.color = Color.clear;
+			Gizmos.matrix = transform.localToWorldMatrix;
+			Gizmos.DrawCube(b.center, b.extents * 2);
+			Gizmos.matrix = Matrix4x4.identity;
+			Gizmos.color = Color.white;
+		}
+	}
+#endif
 
 	protected override void CreateCollider() {
 		UpdateCollider();
@@ -381,5 +269,32 @@ public class tk2dTiledSprite : tk2dBaseSprite
 			return 0;
 #endif
 		return 16;
+	}
+
+	public override void ReshapeBounds(Vector3 dMin, Vector3 dMax) {
+		var sprite = CurrentSprite;
+		Vector3 oldSize = new Vector3(_dimensions.x * sprite.texelSize.x * _scale.x, _dimensions.y * sprite.texelSize.y * _scale.y);
+		Vector3 oldMin = Vector3.zero;
+		switch (_anchor) {
+			case Anchor.LowerLeft: oldMin.Set(0,0,0); break;
+			case Anchor.LowerCenter: oldMin.Set(0.5f,0,0); break;
+			case Anchor.LowerRight: oldMin.Set(1,0,0); break;
+			case Anchor.MiddleLeft: oldMin.Set(0,0.5f,0); break;
+			case Anchor.MiddleCenter: oldMin.Set(0.5f,0.5f,0); break;
+			case Anchor.MiddleRight: oldMin.Set(1,0.5f,0); break;
+			case Anchor.UpperLeft: oldMin.Set(0,1,0); break;
+			case Anchor.UpperCenter: oldMin.Set(0.5f,1,0); break;
+			case Anchor.UpperRight: oldMin.Set(1,1,0); break;
+		}
+		oldMin = Vector3.Scale(oldMin, oldSize) * -1;
+		Vector3 newDimensions = oldSize + dMax - dMin;
+		newDimensions.x /= sprite.texelSize.x * _scale.x;
+		newDimensions.y /= sprite.texelSize.y * _scale.y;
+		Vector3 scaledMin = new Vector3(Mathf.Approximately(_dimensions.x, 0) ? 0 : (oldMin.x * newDimensions.x / _dimensions.x),
+			Mathf.Approximately(_dimensions.y, 0) ? 0 : (oldMin.y * newDimensions.y / _dimensions.y));
+		Vector3 offset = oldMin + dMin - scaledMin;
+		offset.z = 0;
+		transform.position = transform.TransformPoint(offset);
+		dimensions = new Vector2(newDimensions.x, newDimensions.y);
 	}
 }

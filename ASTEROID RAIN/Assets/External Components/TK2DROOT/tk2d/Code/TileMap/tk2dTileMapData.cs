@@ -13,6 +13,7 @@ namespace tk2dRuntime.TileMap
 		public float z = 0.1f;
 		public int unityLayer = 0;
 		public bool skipMeshGeneration = false;
+		public PhysicMaterial physicMaterial = null;
 		
 		public LayerInfo()
 		{
@@ -29,6 +30,7 @@ namespace tk2dRuntime.TileMap
 		public string stringVal = "";
 		public int intVal;
 		public float floatVal;
+		public bool enablePrefabOffset;
 	}
 }
 
@@ -56,6 +58,8 @@ public class tk2dTileMapData : ScriptableObject
 	public TileType tileType = TileType.Rectangular;
 
 	public SortMethod sortMethod = SortMethod.BottomLeft;
+
+	public bool layersFixedZ = false;
 	
 	public Object[] tilePrefabs = new Object[0];
 	[SerializeField]

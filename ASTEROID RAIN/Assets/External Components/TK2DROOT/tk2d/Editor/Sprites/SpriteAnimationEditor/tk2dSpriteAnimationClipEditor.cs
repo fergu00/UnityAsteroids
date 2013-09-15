@@ -77,8 +77,8 @@ namespace tk2dEditor.SpriteAnimationEditor
 		{
 			if (preview != null)
 				preview.Destroy();
-			if (sprite != null)
-				Object.DestroyImmediate(sprite.gameObject);
+			if (_animator != null)
+				Object.DestroyImmediate(_animator.gameObject);
 		}
 
 		// Frame groups
@@ -131,23 +131,71 @@ namespace tk2dEditor.SpriteAnimationEditor
 		}
 		List<FrameGroup> frameGroups = new List<FrameGroup>();
 
-		// Animated sprite
-		tk2dAnimatedSprite sprite = null;
-		tk2dAnimatedSprite Sprite {
-			get {
-				if (sprite == null)
-				{
-					GameObject go = new GameObject("@AnimatedSprite");
-					go.hideFlags = HideFlags.HideAndDontSave;
-					#if UNITY_3_0 || UNITY_3_1 || UNITY_3_2 || UNITY_3_3 || UNITY_3_4 || UNITY_3_5 || UNITY_3_6 || UNITY_3_7 || UNITY_3_8 || UNITY_3_9
-						go.active = false;
-					#else
-						go.SetActive(false);
-					#endif
-					sprite = go.AddComponent<tk2dAnimatedSprite>();
-				}
-				return sprite;
+		// Sprite animator
+		tk2dSpriteAnimator _animator = null;
+
+		void InitAnimator() {
+			if (_animator == null) {
+				GameObject go = new GameObject("@SpriteAnimator");
+				go.hideFlags = HideFlags.HideAndDontSave;
+				#if UNITY_3_0 || UNITY_3_1 || UNITY_3_2 || UNITY_3_3 || UNITY_3_4 || UNITY_3_5 || UNITY_3_6 || UNITY_3_7 || UNITY_3_8 || UNITY_3_9
+					go.active = false;
+				#else
+					go.SetActive(false);
+				#endif
+				go.AddComponent<tk2dSprite>();
+				_animator = go.AddComponent<tk2dSpriteAnimator>();
 			}
+		}
+
+		tk2dSpriteAnimator Animator {
+			get {
+				InitAnimator();
+				return _animator;
+			}
+		}
+
+		bool CheckValidClip(tk2dSpriteAnimationClip clip) {
+			bool nullCollectionFound = false;
+			bool invalidSpriteIdFound = false;
+			for (int i = 0; i < clip.frames.Length; ++i) {
+				tk2dSpriteAnimationFrame frame = clip.frames[i];
+				if (frame.spriteCollection == null) {
+					nullCollectionFound = true;
+				}
+				else {
+					if (!frame.spriteCollection.IsValidSpriteId(frame.spriteId)) {
+						if (frame.spriteCollection.FirstValidDefinitionIndex == -1) {
+							nullCollectionFound = true;
+						}
+						else {
+							invalidSpriteIdFound = true;
+						}
+					}
+				}
+			}
+
+			if (nullCollectionFound) {
+				EditorUtility.DisplayDialog("Invalid sprite collection found in clip.", "An invalid sprite collection has been found in the selected clip. Please correct this in the inspector.", "Ok");
+				return false;
+			}
+
+			if (invalidSpriteIdFound) {
+				if (EditorUtility.DisplayDialog("Invalid sprite found in clip.", "An invalid sprite has been found in the selected clip. Has the sprite been deleted from the collection?\n\nDo you wish to replace this with a valid sprite from the collection?\n\nThis may not be correct, but you will be able to edit the clip after this.", "Yes", "No")) {
+					for (int i = 0; i < clip.frames.Length; ++i) {
+						tk2dSpriteAnimationFrame frame = clip.frames[i];
+						if (!frame.spriteCollection.IsValidSpriteId(frame.spriteId)) {
+							frame.spriteId = frame.spriteCollection.FirstValidDefinitionIndex;
+						}
+					}
+					return true;
+				}
+				else {
+					return false;
+				}
+			}
+
+			return true;
 		}
 
 		// Internal set clip, reset all 
@@ -161,30 +209,38 @@ namespace tk2dEditor.SpriteAnimationEditor
 				timelineEditor.Reset();
 
 				if (!repeatPlayAnimation) playAnimation = false;
-				this.Sprite.Stop();
+				this.Animator.Stop();
 
 				// build frame groups
 				if (clip != null)
 				{
-					frameGroups.Clear();
-					tk2dSpriteCollectionData lastSc = null;
-					int lastSpriteId = -1;
-					FrameGroup frameGroup = null;
-					for (int i = 0; i < clip.frames.Length; ++i)
-					{
-						tk2dSpriteAnimationFrame f = clip.frames[i];
-						if (f.spriteCollection != lastSc || f.spriteId != lastSpriteId)
+					if (CheckValidClip(clip)) {
+						// check if clip is valid?
+						frameGroups.Clear();
+						tk2dSpriteCollectionData lastSc = null;
+						int lastSpriteId = -1;
+						FrameGroup frameGroup = null;
+						for (int i = 0; i < clip.frames.Length; ++i)
 						{
-							if (frameGroup != null) frameGroups.Add(frameGroup);
-							frameGroup = new FrameGroup();
-							frameGroup.spriteCollection = f.spriteCollection;
-							frameGroup.spriteId = f.spriteId;
+							tk2dSpriteAnimationFrame f = clip.frames[i];
+							if (f.spriteCollection != lastSc || f.spriteId != lastSpriteId)
+							{
+								if (frameGroup != null) frameGroups.Add(frameGroup);
+								frameGroup = new FrameGroup();
+								frameGroup.spriteCollection = f.spriteCollection;
+								frameGroup.spriteId = f.spriteId;
+							}
+							lastSc = f.spriteCollection;
+							lastSpriteId = f.spriteId;
+							frameGroup.frames.Add(f);
 						}
-						lastSc = f.spriteCollection;
-						lastSpriteId = f.spriteId;
-						frameGroup.frames.Add(f);
+						if (frameGroup != null) frameGroups.Add(frameGroup);
+
+						// Select first frame group
+						if (frameGroups.Count > 0) {
+							timelineEditor.CurrentState.selectedFrame = 0;
+						}
 					}
-					if (frameGroup != null) frameGroups.Add(frameGroup);
 				}
 			}
 		}
@@ -200,7 +256,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 			// get frame from frame group
 			if (playAnimation)
 			{
-				preview.Draw(r, Sprite.GetCurrentSpriteDef());
+				preview.Draw(r, Animator.Sprite.GetCurrentSpriteDef());
 			}
 			else
 			{
@@ -227,8 +283,10 @@ namespace tk2dEditor.SpriteAnimationEditor
 		{
 			GUILayout.BeginHorizontal();
 			GUILayout.Label("Clip", EditorStyles.largeLabel);
-			if (GUILayout.Button("Delete", GUILayout.Width(46)))
+			if (GUILayout.Button("Delete", GUILayout.Width(46)) 
+				&& EditorUtility.DisplayDialog("Delete clip", "Are you sure you want to delete the selected clip?", "Yes", "No")) {
 				OnClipDeleted();
+			}
 			GUILayout.EndHorizontal();
 
 			GUI.SetNextControlName("tk2dAnimName");
@@ -360,7 +418,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 		{
 			if (playAnimation)
 			{
-				if (Sprite != null) Sprite.Stop();
+				if (Animator != null) Animator.Stop();
 				playAnimation = false;
 			}
 			else
@@ -376,7 +434,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 				playAnimation = true;
 				previousTimeStamp = EditorApplication.timeSinceStartup; // reset time to avoid huge delta time
 				repeatPlayWaitTime = repeatPlayWaitTimeConst;
-				Sprite.Play(Clip, 0);
+				Animator.PlayFrom(Clip, 0);
 				Repaint();
 			}
 		}
@@ -387,7 +445,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 
 			if (Event.current.type == EventType.Repaint)
 			{
-				if (playAnimation && !Sprite.Playing)
+				if (playAnimation && !Animator.Playing)
 				{
 					if (repeatPlayAnimation || clip.wrapMode == tk2dSpriteAnimationClip.WrapMode.Single)
 					{
@@ -398,7 +456,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 						}
 						else
 						{
-							Sprite.Play(Clip, 0);
+							Animator.PlayFrom(Clip, 0);
 							repeatPlayWaitTime = repeatPlayWaitTimeConst;
 							Repaint();
 						}
@@ -422,7 +480,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 				}
 				else
 				{
-					Sprite.Stop();
+					Animator.Stop();
 					Repaint();
 				}
 				playAnimation = newPlayAnimation;
@@ -536,10 +594,10 @@ namespace tk2dEditor.SpriteAnimationEditor
 				previousTimeStamp = t;
 
 				// Update sprite
-				if (Sprite.Playing)
+				if (Animator.Playing)
 				{
-					Sprite.ClipFps = clip.fps;
-					Sprite.UpdateAnimation(deltaTime);
+					Animator.ClipFps = clip.fps;
+					Animator.UpdateAnimation(deltaTime);
 					Repaint(); // refresh
 				}
 			}
@@ -557,7 +615,7 @@ namespace tk2dEditor.SpriteAnimationEditor
 			float clipTimeMarker = -1.0f;
 			if (playAnimation)
 			{
-				float clipTime = Sprite.Playing ? Sprite.EditorClipTime : 0.0f;
+				float clipTime = Animator.Playing ? Animator.EditorClipTime : 0.0f;
 				clipTimeMarker = clipTime;
 			}
 

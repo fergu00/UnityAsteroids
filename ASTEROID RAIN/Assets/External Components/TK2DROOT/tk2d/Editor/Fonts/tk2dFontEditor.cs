@@ -20,24 +20,12 @@ public class tk2dFontEditor : Editor
 			GUILayout.Label("This font is managed by a Sprite Collection");
 			return;
 		}
-		
+		gen.Upgrade();
+
 		EditorGUILayout.BeginVertical();
 
-		DrawDefaultInspector();
-		
-		gen.useTk2dCamera = EditorGUILayout.Toggle("Use tk2d Camera", gen.useTk2dCamera);
-		if (gen.useTk2dCamera)
-		{
-			gen.targetHeight = 1;
-			gen.targetOrthoSize = 0.5f;
-		}
-		else
-		{
-			EditorGUI.indentLevel = EditorGUI.indentLevel + 1;
-			gen.targetHeight = EditorGUILayout.IntField("Target Height", gen.targetHeight);
-			gen.targetOrthoSize = EditorGUILayout.FloatField("Target Ortho Size", gen.targetOrthoSize);
-			EditorGUI.indentLevel = EditorGUI.indentLevel - 1;
-		}
+		DrawDefaultInspector();		
+		tk2dGuiUtility.SpriteCollectionSize( gen.sizeDef );
 		
 		// Warning when texture is compressed
 		if (gen.texture != null)
@@ -146,8 +134,8 @@ public class tk2dFontEditor : Editor
 			gen.data.gradientCount = gen.gradientCount;
 			gen.data.gradientTexture = gen.gradientTexture;
 			
-			gen.data.invOrthoSize = 1.0f / gen.targetOrthoSize;
-			gen.data.halfTargetHeight = gen.targetHeight * 0.5f;
+			gen.data.invOrthoSize = 1.0f / gen.sizeDef.OrthoSize;
+			gen.data.halfTargetHeight = gen.sizeDef.TargetHeight * 0.5f;
 			
             // Rebuild assets already present in the scene
             tk2dTextMesh[] sprs = Resources.FindObjectsOfTypeAll(typeof(tk2dTextMesh)) as tk2dTextMesh[];
@@ -205,8 +193,7 @@ public class tk2dFontEditor : Editor
 	
 	bool ParseBMFont(string path, tk2dFontData fontData, tk2dFont source)
 	{
-		float scale = 2.0f * source.targetOrthoSize / source.targetHeight;
-		if (source.useTk2dCamera) scale = 1.0f;
+		float scale = 2.0f * source.sizeDef.OrthoSize / source.sizeDef.TargetHeight;
 		
 		tk2dEditor.Font.Info fontInfo = tk2dEditor.Font.Builder.ParseBMFont(path);
 		if (fontInfo != null)
@@ -224,6 +211,10 @@ public class tk2dFontEditor : Editor
 			GameObject go = new GameObject();
 			tk2dFont font = go.AddComponent<tk2dFont>();
 			font.manageMaterial = true;
+			font.version = tk2dFont.CURRENT_VERSION;
+			if (tk2dCamera.Editor__Inst != null) {
+				font.sizeDef.CopyFrom( tk2dSpriteCollectionSize.ForTk2dCamera( tk2dCamera.Editor__Inst ) );
+			}
 			tk2dEditorUtility.SetGameObjectActive(go, false);
 
 #if (UNITY_3_0 || UNITY_3_1 || UNITY_3_2 || UNITY_3_3 || UNITY_3_4)

@@ -43,7 +43,11 @@ namespace tk2dEditor
 			Dictionary<Material, List<int>> triangles = new Dictionary<Material, List<int>>();
 			
 			// bounds of tile
-			Vector3 spriteBounds = spriteCollection.FirstValidDefinition.untrimmedBoundsData[1];
+			Vector3 spriteBounds = Vector3.zero;
+			foreach (var spriteDef in spriteCollection.spriteDefinitions) {
+				if (spriteDef.Valid)
+					spriteBounds = Vector3.Max(spriteBounds, spriteDef.untrimmedBoundsData[1]);
+			}
 			Vector3 tileSize = brush.overrideWithSpriteBounds?
 								spriteBounds:
 								tileMap.data.tileSize;
@@ -81,11 +85,8 @@ namespace tk2dEditor
 
 						for (int j = 0; j < sprite.positions.Length; ++j)
 						{
-							// Sprite vertex, centered around origin
-							Vector3 centeredSpriteVertex = sprite.positions[j] - sprite.untrimmedBoundsData[0];
-							
 							// Offset so origin is at bottom left
-							Vector3 v = centeredSpriteVertex + sprite.untrimmedBoundsData[1] * 0.5f;
+							Vector3 v = sprite.positions[j] - tileMap.data.tileOrigin;
 							
 							boundsMin = Vector3.Min(boundsMin, tileOrigin + v);
 							boundsMax = Vector3.Max(boundsMax, tileOrigin + v);
@@ -127,21 +128,30 @@ namespace tk2dEditor
 						boundsMax = Vector3.Max(boundsMax, tileOrigin + tileSize);
 					}
 
+					int spriteIdx = tk2dRuntime.TileMap.BuilderUtil.GetTileFromRawTile(tile.spriteId);
+					bool flipH = tk2dRuntime.TileMap.BuilderUtil.IsRawTileFlagSet(tile.spriteId, tk2dTileFlags.FlipX);
+					bool flipV = tk2dRuntime.TileMap.BuilderUtil.IsRawTileFlagSet(tile.spriteId, tk2dTileFlags.FlipY);
+					bool rot90 = tk2dRuntime.TileMap.BuilderUtil.IsRawTileFlagSet(tile.spriteId, tk2dTileFlags.Rot90);
 
-					if (tile.spriteId == -1)
+					if (spriteIdx < 0 || spriteIdx >= spriteCollection.Count)
 						continue;
 					
 					int indexRoot = vertices.Count;
-					tile.spriteId = (ushort)Mathf.Clamp(tile.spriteId, 0, spriteCollection.Count - 1);
-					var sprite = spriteCollection.spriteDefinitions[tile.spriteId];
+					var sprite = spriteCollection.spriteDefinitions[spriteIdx];
+
+					if (brush.overrideWithSpriteBounds) {
+						tileOrigin.x += spriteBounds.x * 0.5f - sprite.untrimmedBoundsData[0].x;
+						tileOrigin.y += spriteBounds.y * 0.5f - sprite.untrimmedBoundsData[0].y;
+					}
 		
 					for (int j = 0; j < sprite.positions.Length; ++j)
 					{
-						// Sprite vertex, centered around origin
-						Vector3 centeredSpriteVertex = sprite.positions[j] - sprite.untrimmedBoundsData[0];
+						Vector3 flippedPos = tk2dRuntime.TileMap.BuilderUtil.ApplySpriteVertexTileFlags(tileMap, sprite, sprite.positions[j], flipH, flipV, rot90);
 						
-						// Offset so origin is at bottom left
-						Vector3 v = centeredSpriteVertex + sprite.untrimmedBoundsData[1] * 0.5f;
+						// Offset so origin is at bottom left (if not using bounds)
+						Vector3 v = flippedPos;
+						if (!brush.overrideWithSpriteBounds)
+							v -= tileMap.data.tileOrigin;
 
 						boundsMin = Vector3.Min(boundsMin, tileOrigin + v);
 						boundsMax = Vector3.Max(boundsMax, tileOrigin + v);
@@ -212,24 +222,29 @@ namespace tk2dEditor
 		
 		float lastScale;
 		public float LastScale { get { return lastScale; } }
+
+		public Rect GetBrushViewRect(tk2dTileMapEditorBrush brush, int tilesPerRow) {
+			var dictData = GetDictDataForBrush(brush, tilesPerRow);
+			return BrushToScreenRect(dictData.rect);
+		}
 		
 		public Rect DrawBrush(tk2dTileMap tileMap, tk2dTileMapEditorBrush brush, float scale, bool forceUnitSpacing, int tilesPerRow)
 		{
 			var dictData = GetDictDataForBrush(brush, tilesPerRow);
 			Mesh atlasViewMesh = dictData.mesh;
 			Rect atlasViewRect = BrushToScreenRect(dictData.rect);
+
+			Rect visibleRect = tk2dSpriteThumbnailCache.VisibleRect;
+			Vector4 clipRegion = new Vector4(visibleRect.x, visibleRect.y, visibleRect.x + visibleRect.width, visibleRect.y + visibleRect.height);
+
+			Material customMaterial = tk2dSpriteThumbnailCache.GetMaterial();
+			customMaterial.SetColor("_Tint", Color.white);
+			customMaterial.SetVector("_Clip", clipRegion);
 			
 			float width = atlasViewRect.width * scale;
 			float height = atlasViewRect.height * scale;
 			
-			float maxScreenWidth = Screen.width - 16;
-			if (width > maxScreenWidth)
-			{
-				height = height * maxScreenWidth / width;
-				width = maxScreenWidth;
-			}
-			
-			Rect rect = GUILayoutUtility.GetRect(width, height, GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false));
+			Rect rect = GUILayoutUtility.GetRect(width, height, GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(true));
 			scale = width / atlasViewRect.width;
 			lastScale = scale;
 			
@@ -242,7 +257,8 @@ namespace tk2dEditor
 					
 				for (int i = 0; i < dictData.materials.Length; ++i)
 				{
-					dictData.materials[i].SetPass(0);				
+					customMaterial.mainTexture = dictData.materials[i].mainTexture;
+					customMaterial.SetPass(0);
 					Graphics.DrawMeshNow(atlasViewMesh, mat * GUI.matrix, i);
 				}
 			}
@@ -273,8 +289,47 @@ namespace tk2dEditor
 			get 
 			{
 				Vector3 texelSize = TexelSize;
-				Vector3 tileSize = spriteCollection.spriteDefinitions[0].untrimmedBoundsData[1];
+				Vector3 tileSize = Vector3.zero;
+				foreach (var spriteDef in spriteCollection.spriteDefinitions) {
+					if (spriteDef.Valid)
+						tileSize = Vector3.Max(tileSize, spriteDef.untrimmedBoundsData[1]);
+				}
 				return new Rect(0, 0, tileSize.x / texelSize.x, tileSize.y / texelSize.y);
+			}
+		}
+
+		public void DrawBrushInScene(Matrix4x4 matrix, tk2dTileMapEditorBrush brush, int tilesPerRow) {
+			var dictData = GetDictDataForBrush(brush, tilesPerRow);
+			Mesh mesh = dictData.mesh;
+
+			Vector4 clipRegion = new Vector4(-1.0e32f, -1.0e32f, 1.0e32f, 1.0e32f);
+			Material customMaterial = tk2dSpriteThumbnailCache.GetMaterial();
+			customMaterial.SetColor("_Tint", new Color(1,1,1,tk2dTileMapToolbar.workBrushOpacity));
+			customMaterial.SetVector("_Clip", clipRegion);
+
+			for (int i = 0; i < dictData.materials.Length; ++i)
+			{
+				customMaterial.mainTexture = dictData.materials[i].mainTexture;
+				customMaterial.SetPass(0);
+				Graphics.DrawMeshNow( mesh, matrix, i );
+			}
+		}
+
+		public void DrawBrushInScratchpad(tk2dTileMapEditorBrush brush, Matrix4x4 matrix, bool setWorkbrushOpacity) {
+			var dictData = GetDictDataForBrush(brush, 1000000);
+			Mesh mesh = dictData.mesh;
+
+			Rect visibleRect = tk2dSpriteThumbnailCache.VisibleRect;
+			Vector4 clipRegion = new Vector4(visibleRect.x, visibleRect.y, visibleRect.x + visibleRect.width, visibleRect.y + visibleRect.height);
+
+			Material customMaterial = tk2dSpriteThumbnailCache.GetMaterial();
+			customMaterial.SetColor("_Tint", new Color(1,1,1,setWorkbrushOpacity?tk2dTileMapToolbar.workBrushOpacity:1));
+			customMaterial.SetVector("_Clip", clipRegion);
+
+			for (int i = 0; i < dictData.materials.Length; ++i) {
+				customMaterial.mainTexture = dictData.materials[i].mainTexture;
+				customMaterial.SetPass(0);
+				Graphics.DrawMeshNow(mesh, matrix, i);
 			}
 		}
 	}

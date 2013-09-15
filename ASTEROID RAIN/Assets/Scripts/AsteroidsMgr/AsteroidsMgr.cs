@@ -66,7 +66,7 @@ public class AsteroidsMgr : MonoBehaviour {
 		//Initialize the m_asteroid to get Y size of the sprite to calculate the Initial Position the Asteroids Are 
 		//going to be instantiated
 		GameObject actualAsteroid = (GameObject)Resources.Load(m_nameAsteroidsPrefabs[0]);
-		m_posYToCreate = Camera.mainCamera.transform.localPosition.y + Camera.mainCamera.orthographicSize + actualAsteroid.GetComponent<tk2dSprite>().GetBounds().size.y;
+		m_posYToCreate = Camera.main.transform.localPosition.y + Camera.main.orthographicSize + actualAsteroid.GetComponent<tk2dSprite>().GetBounds().size.y;
 	}
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 	// CreateRandomAsteroid: Create a Random Asteroid in a Random X position in the screen

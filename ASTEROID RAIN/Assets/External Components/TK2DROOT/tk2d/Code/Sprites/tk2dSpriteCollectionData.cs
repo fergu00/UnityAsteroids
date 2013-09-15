@@ -122,8 +122,53 @@ public class tk2dSpriteDefinition
 	public int[] colliderIndicesBack;
 	public bool colliderConvex;
 	public bool colliderSmoothSphereCollisions;
+
+
+	[System.Serializable]
+	public class AttachPoint
+	{
+		public string name = "";
+		public Vector3 position = Vector3.zero;
+		public float angle = 0;
+
+		public void CopyFrom( AttachPoint src ) {
+			name = src.name;
+			position = src.position;
+			angle = src.angle;
+		}
+
+		public bool CompareTo( AttachPoint src ) {
+			return (name == src.name && src.position == position && src.angle == angle);
+		}
+	}
+
+	public AttachPoint[] attachPoints = new AttachPoint[0];
 	
 	public bool Valid { get { return name.Length != 0; } }
+
+	/// <summary>
+	/// Gets the trimmed bounds of the sprite.
+	/// </summary>
+	/// <returns>
+	/// Local space bounds
+	/// </returns>
+	public Bounds GetBounds()
+	{
+		return new Bounds(new Vector3(boundsData[0].x, boundsData[0].y, boundsData[0].z),
+		                  new Vector3(boundsData[1].x, boundsData[1].y, boundsData[1].z));
+	}
+	
+	/// <summary>
+	/// Gets untrimmed bounds of the sprite.
+	/// </summary>
+	/// <returns>
+	/// Local space untrimmed bounds
+	/// </returns>
+	public Bounds GetUntrimmedBounds()
+	{
+		return new Bounds(new Vector3(untrimmedBoundsData[0].x, untrimmedBoundsData[0].y, untrimmedBoundsData[0].z),
+		                  new Vector3(untrimmedBoundsData[1].x, untrimmedBoundsData[1].y, untrimmedBoundsData[1].z));
+	}
 }
 
 [AddComponentMenu("2D Toolkit/Backend/tk2dSpriteCollectionData")]
@@ -261,6 +306,7 @@ public class tk2dSpriteCollectionData : MonoBehaviour
 	/// Unique Sprite Id. defaultValue if sprite isn't found.
 	/// </returns>
 	/// <param name='name'>Case sensitive sprite name, as defined in the sprite collection. This is usually the source filename excluding the extension</param>
+	/// <param name='defaultValue'>The value which is returned when the named sprite can't be found.</param>
 	public int GetSpriteIdByName(string name, int defaultValue)
 	{
 		inst.InitDictionary();
@@ -315,6 +361,16 @@ public class tk2dSpriteCollectionData : MonoBehaviour
 			}
 			return null;
 		}
+	}
+
+	/// <summary>
+	/// Returns true if the sprite id is valid for this sprite collection
+	/// </summary>
+	public bool IsValidSpriteId(int id) {
+		if (id < 0 || id >= inst.spriteDefinitions.Length) {
+			return false;
+		}
+		return inst.spriteDefinitions[id].Valid;
 	}
 	
 	/// <summary>
@@ -456,7 +512,7 @@ public class tk2dSpriteCollectionData : MonoBehaviour
 	/// Please ensure that names, regions & anchor arrays have same dimension.
 	/// Use <see cref="tk2dBaseSprite.CreateFromTexture"/> if you need to create only one sprite from a texture.
 	/// </summary>
-	public static tk2dSpriteCollectionData CreateFromTexture(Texture texture, tk2dRuntime.SpriteCollectionSize size, string[] names, Rect[] regions, Vector2[] anchors)
+	public static tk2dSpriteCollectionData CreateFromTexture(Texture texture, tk2dSpriteCollectionSize size, string[] names, Rect[] regions, Vector2[] anchors)
 	{
 		return tk2dRuntime.SpriteCollectionGenerator.CreateFromTexture(texture, size, names, regions, anchors);
 	}
@@ -467,7 +523,7 @@ public class tk2dSpriteCollectionData : MonoBehaviour
 	/// You can find this exporter in Assets/TK2DROOT/tk2d/Goodies/TexturePacker/Exporter
 	/// You can use also use this to load sprite collections at runtime.
 	/// </summary>
-	public static tk2dSpriteCollectionData CreateFromTexturePacker(tk2dRuntime.SpriteCollectionSize size, string texturePackerData, Texture texture)
+	public static tk2dSpriteCollectionData CreateFromTexturePacker(tk2dSpriteCollectionSize size, string texturePackerData, Texture texture)
 	{
 		return tk2dRuntime.SpriteCollectionGenerator.CreateFromTexturePacker(size, texturePackerData, texture);
 	}
@@ -480,6 +536,22 @@ public class tk2dSpriteCollectionData : MonoBehaviour
 		}
 		
 		materialInsts = null;
+	}
+
+	/// <summary>
+	/// Unloads the atlas texture data in this sprite collection.
+	/// This will be reloaded when the data is accessed again.
+	/// Make sure all sprites using this collection have already been destroyed.
+	/// </summary>
+	public void UnloadTextures() {
+		// Debug.Log(Resources.FindObjectsOfTypeAll(typeof(Texture2D)).Length);
+
+		tk2dSpriteCollectionData theInst = inst;
+		foreach (Texture2D texture in theInst.textures) {
+			Resources.UnloadAsset(texture);
+		}
+
+		// Debug.Log(Resources.FindObjectsOfTypeAll(typeof(Texture2D)).Length);
 	}
 
 	void OnDestroy()

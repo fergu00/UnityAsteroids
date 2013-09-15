@@ -342,7 +342,7 @@ namespace tk2dEditor.SpriteCollectionEditor
 				if (param.customSpriteGeometry)
 					textureEditor.SetMode(tk2dEditor.SpriteCollectionEditor.TextureEditor.Mode.Texture);
 			}
-			
+
 			// Sanity check dicing & multiple atlases
 			if (param.dice && SpriteCollection.allowMultipleAtlases)
 			{
@@ -358,17 +358,25 @@ namespace tk2dEditor.SpriteCollectionEditor
 				EditorGUI.indentLevel++;
 				param.diceUnitX = EditorGUILayout.IntField("Dice X", param.diceUnitX);
 				param.diceUnitY = EditorGUILayout.IntField("Dice Y", param.diceUnitY);
+				GUIContent diceFilter = new GUIContent("Dice Filter", 
+					"Dice Filter lets you dice and only store a subset of the dices. This lets you perform more optimizations, drawing solid dices with a solid shader.\n\n"+
+					"Complete - Draw all dices (Default).\nSolidOnly - Only draw the solid dices.\nTransparent Only - Only draw transparent dices.");
+				param.diceFilter = (tk2dSpriteCollectionDefinition.DiceFilter)EditorGUILayout.EnumPopup(diceFilter, param.diceFilter);
 				EditorGUI.indentLevel--;
 				EditorGUILayout.Separator();
 			}
 			
 			HandleMultiSelection(entries, 
-				(a,b) => a.customSpriteGeometry == b.customSpriteGeometry && a.dice == b.dice && a.diceUnitX == b.diceUnitX && a.diceUnitY == b.diceUnitY, 
+				(a,b) => a.customSpriteGeometry == b.customSpriteGeometry && a.dice == b.dice && a.diceUnitX == b.diceUnitX && a.diceUnitY == b.diceUnitY && a.diceFilter == b.diceFilter, 
 				delegate(tk2dSpriteCollectionDefinition a, tk2dSpriteCollectionDefinition b) {
 					b.customSpriteGeometry = a.customSpriteGeometry;
 					b.dice = a.dice;
 					b.diceUnitX = a.diceUnitX;
 					b.diceUnitY = a.diceUnitY;
+					b.diceFilter = a.diceFilter;
+					if (a.customSpriteGeometry) {
+						CopyPolyCollider(a.geometryIslands, ref b.geometryIslands);
+					}
 			});
 			
 

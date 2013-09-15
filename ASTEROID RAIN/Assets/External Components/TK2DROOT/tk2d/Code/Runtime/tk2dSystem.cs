@@ -157,7 +157,7 @@ public class tk2dSystem : ScriptableObject
 		// TODO: create and use a dictionary
 		for (int i = 0; i < allResourceEntries.Length; ++i)
 		{
-			if (allResourceEntries[i] == null || allResourceEntries[i].assetName == name)
+			if (allResourceEntries[i] != null && allResourceEntries[i].assetName == name)
 				return LoadResourceByGUIDImpl<T>(allResourceEntries[i].assetGUID);
 		}
 		return null;
